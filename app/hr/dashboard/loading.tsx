@@ -1,13 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/shared/Skeleton";
-import { DashboardHeaderSkeleton, DashboardMetricsRowSkeleton } from "@/components/shared/DashboardLoadingShell";
+import { DashboardHeroRowSkeleton, DashboardMetricsRowSkeleton } from "@/components/shared/DashboardLoadingShell";
 
-/** Mirrors app/hr/dashboard/page.tsx: header, 4 metric tiles, then a
- *  warnings list beside Quick Actions + Onboarding Status. */
+/** Mirrors the current app/hr/dashboard/page.tsx: hero row (HeroStatCard +
+ *  donut), 4 metric tiles, then a warnings list beside Quick Actions +
+ *  Warnings by Reason. Previously stale — showed no hero/ring placeholder
+ *  at all and an "Onboarding Status" section that no longer exists. */
 export default function Loading() {
   return (
     <div className="mx-auto max-w-5xl">
-      <DashboardHeaderSkeleton />
+      <DashboardHeroRowSkeleton />
       <DashboardMetricsRowSkeleton />
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
@@ -43,9 +45,14 @@ export default function Loading() {
           </Card>
           <Card>
             <CardContent>
-              <Skeleton className="mb-2 h-3 w-32" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="mt-2 h-1.5 w-full rounded-full" />
+              <Skeleton className="mb-3 h-3 w-32" />
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="mb-2 flex items-center gap-2.5 last:mb-0">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-2 flex-1 rounded-full" />
+                  <Skeleton className="h-3 w-4" />
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>

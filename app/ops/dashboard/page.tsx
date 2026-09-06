@@ -78,7 +78,8 @@ export default function OpsDashboardPage() {
             <ProgressRing
               value={advancedPercent}
               size={104}
-              centerLabel={<span className="text-lg font-bold text-foreground">{advancedPercent}%</span>}
+              tone="purple"
+              showCenterLabel
             />
             <p className="text-xs text-muted-foreground">
               {advancedCount} of {pipelineTotal} applicants past initial application

@@ -86,7 +86,8 @@ export default function HrDashboardPage() {
             <ProgressRing
               value={onboardingPercent}
               size={104}
-              centerLabel={<span className="text-lg font-bold text-foreground">{onboardingPercent}%</span>}
+              tone="gold"
+              showCenterLabel
             />
             <p className="text-xs text-muted-foreground">
               {staff.length - incompleteCount} of {staff.length} staff complete
