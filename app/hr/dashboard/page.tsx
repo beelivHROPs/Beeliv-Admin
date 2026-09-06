@@ -40,6 +40,23 @@ export default function HrDashboardPage() {
   const onboardingPercent =
     staff.length > 0 ? Math.round(((staff.length - incompleteCount) / staff.length) * 100) : 0;
 
+  // Outlet-scoped, not all of SAMPLE_WARNINGS — this role is outlet-
+  // restricted (rbac.md §3) and must never surface another outlet's staff,
+  // even in a warnings list. (Previously unfiltered; only became visible
+  // once more than one outlet had warnings on record.)
+  const outletStaffNames = new Set(staff.map((s) => s.name));
+  const outletWarnings = SAMPLE_WARNINGS.filter((w) => outletStaffNames.has(w.staffName));
+
+  // Category Analysis (real data, not an invented KPI) — count of this
+  // outlet's warnings grouped by reason, sorted by count for the bar list.
+  const warningsByReason = Object.entries(
+    outletWarnings.reduce<Record<string, number>>((acc, w) => {
+      acc[w.reason] = (acc[w.reason] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]);
+  const maxReasonCount = Math.max(1, ...warningsByReason.map(([, count]) => count));
+
   return (
     <div className="mx-auto max-w-5xl">
       {/* Hero row — Mintora-reference gradient stat card (outlet name +
@@ -106,7 +123,7 @@ export default function HrDashboardPage() {
             icon={AlertTriangle}
             iconTone="destructive"
             label="Recent Warnings Issued"
-            value={<CountUp value={SAMPLE_WARNINGS.length} />}
+            value={<CountUp value={outletWarnings.length} />}
             caption="This period"
           />,
           <MetricCard
@@ -131,9 +148,9 @@ export default function HrDashboardPage() {
             <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Recent Warnings Issued
             </h2>
-            {SAMPLE_WARNINGS.length > 0 ? (
+            {outletWarnings.length > 0 ? (
               <ul className="m-0 list-none space-y-3 p-0">
-                {SAMPLE_WARNINGS.map((warning) => (
+                {outletWarnings.map((warning) => (
                   <li
                     key={warning.id}
                     className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0"
@@ -175,6 +192,37 @@ export default function HrDashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Analytics section — Category Analysis (real per-reason counts,
+              not an invented KPI), deliberately a compact bar list rather
+              than another chart/donut so this dashboard doesn't read as one
+              repeated widget shape (project-lead: "you don't have to use
+              same design for all dashboards"). */}
+          {warningsByReason.length > 0 ? (
+            <Card>
+              <CardContent>
+                <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Warnings by Reason
+                </h2>
+                <ul className="m-0 list-none space-y-2 p-0">
+                  {warningsByReason.map(([reason, count]) => (
+                    <li key={reason} className="flex items-center gap-2.5">
+                      <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{reason}</span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <span
+                          className="block h-full rounded-full bg-[color:var(--tone-gold)]"
+                          style={{ width: `${(count / maxReasonCount) * 100}%` }}
+                        />
+                      </span>
+                      <span className="w-4 shrink-0 text-right text-xs font-semibold text-foreground">
+                        {count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>
