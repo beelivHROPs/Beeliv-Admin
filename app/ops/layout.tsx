@@ -8,7 +8,6 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
       scopeLabel="All outlets"
       navItems={NAV_ITEMS.ops}
       userName="Sample Operations Lead"
-      notificationCount={5}
       navTone="purple"
     >
       {children}
