@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MetricCard } from "@/components/shared/MetricCard";
 import { CountUp } from "@/components/shared/CountUp";
 import { ProgressRing } from "@/components/shared/ProgressRing";
+import { HeroStatCard } from "@/components/shared/HeroStatCard";
 import { SAMPLE_STAFF, SAMPLE_ATTENDANCE_TODAY, SAMPLE_WARNINGS } from "@/lib/placeholder-data";
 import { DASHBOARD_ACCENT_BG } from "@/lib/dashboard-accent";
 
@@ -36,19 +37,45 @@ export default function HrDashboardPage() {
   const { present, total } = SAMPLE_ATTENDANCE_TODAY;
   const attendancePercent = Math.round((present / total) * 100);
 
+  const onboardingPercent =
+    staff.length > 0 ? Math.round(((staff.length - incompleteCount) / staff.length) * 100) : 0;
+
   return (
     <div className="mx-auto max-w-5xl">
-      {/* Welcome header — outlet name is the load-bearing fact on this
-          screen (rbac.md §3 outlet restriction), so it's given the same
-          visual weight as the applicant portal's greeting. */}
-      <div className="bg-brand-wash mb-5 rounded-2xl px-4 py-5 sm:px-6">
-        <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold tracking-wide text-warning uppercase">
-          <MapPin className="h-3 w-3" /> Assigned HR — Outlet-Scoped
-        </p>
-        <h1 className="font-heading text-2xl font-semibold text-foreground">{outlet}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everything below is scoped to your assigned outlet only.
-        </p>
+      {/* Hero row — Mintora-reference gradient stat card (outlet name +
+          headline staff count, this dashboard's one gradient moment,
+          replacing the previous flat .bg-brand-wash header) beside a
+          donut card mirroring Mintora's "Monthly Growth" ring. Outlet name
+          stays the load-bearing fact (rbac.md §3 outlet restriction). */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <HeroStatCard
+          tone="gold"
+          eyebrow={
+            <>
+              <MapPin className="h-3 w-3" /> Assigned HR — Outlet-Scoped
+            </>
+          }
+          title={outlet}
+          value={<CountUp value={staff.length} />}
+          valueLabel="Staff Assigned"
+          caption="Everything below is scoped to your assigned outlet only."
+          badge={`${incompleteCount} onboarding incomplete`}
+        />
+        <Card>
+          <CardContent className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Onboarding Completion
+            </h2>
+            <ProgressRing
+              value={onboardingPercent}
+              size={104}
+              centerLabel={<span className="text-lg font-bold text-foreground">{onboardingPercent}%</span>}
+            />
+            <p className="text-xs text-muted-foreground">
+              {staff.length - incompleteCount} of {staff.length} staff complete
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Key metrics — staggered entrance, ~70ms/tile (design-system.md §15). */}
@@ -146,28 +173,6 @@ export default function HrDashboardPage() {
                   Generate Report
                 </Link>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent>
-              <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                Onboarding Status
-              </h2>
-              {/* ProgressRing over the plain bar — this outlet's one
-                  purple→gold gradient moment (design-system.md §3, see
-                  that component's own comment), matching the "high-end
-                  data design" pass this session. */}
-              <ProgressRing
-                value={staff.length > 0 ? Math.round(((staff.length - incompleteCount) / staff.length) * 100) : 0}
-                size={64}
-                label={
-                  <p className="text-xs text-muted-foreground">
-                    {staff.length - incompleteCount} of {staff.length} staff have complete
-                    documentation.
-                  </p>
-                }
-              />
             </CardContent>
           </Card>
         </div>
