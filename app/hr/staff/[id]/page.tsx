@@ -30,7 +30,14 @@ export async function generateMetadata({
  * never been updated since the raw-gray/blue-600 prototype pass and looked
  * like a different app next to the rest of the dashboard (spacing audit
  * follow-up).
+ *
+ * Outlet-scoped (rbac.md §3) — direct-URL access to another outlet's staff
+ * record now 404s the same as a nonexistent id, rather than leaking full
+ * detail (found via a QA sweep: the list page was already filtered by
+ * outlet in this same fix, but nothing stopped a direct id lookup here).
  */
+const ASSIGNED_OUTLET = "Sample Outlet 1";
+
 export default async function HrStaffDetailPage({
   params,
 }: {
@@ -39,7 +46,7 @@ export default async function HrStaffDetailPage({
   const { id } = await params;
   const staff = SAMPLE_STAFF.find((s) => s.id === id);
 
-  if (!staff) {
+  if (!staff || staff.outlet !== ASSIGNED_OUTLET) {
     notFound();
   }
 

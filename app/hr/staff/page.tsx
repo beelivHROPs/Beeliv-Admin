@@ -18,13 +18,22 @@ export const metadata: Metadata = { title: "Staff" };
  * "View" link needed since the whole card is the tap target). The table
  * itself is unchanged above `sm:`, where columns have room.
  */
+// Outlet-scoped (rbac.md §3) — same constant/pattern already used by
+// app/hr/dashboard/page.tsx. This list/detail pair was rendering all 8
+// sample staff across both outlets, unfiltered, despite the header
+// claiming single-outlet scope (found via a QA sweep, same bug class the
+// dashboard already had fixed once before).
+const ASSIGNED_OUTLET = "Sample Outlet 1";
+
 export default function HrStaffListPage() {
+  const staff = SAMPLE_STAFF.filter((s) => s.outlet === ASSIGNED_OUTLET);
+
   return (
     <div>
-      <PageHeading title="Staff" description="Sample Outlet 1" />
+      <PageHeading title="Staff" description={ASSIGNED_OUTLET} />
 
       <div className="flex flex-col gap-3 sm:hidden">
-        {SAMPLE_STAFF.map((s) => (
+        {staff.map((s) => (
           <Link
             key={s.id}
             href={`/hr/staff/${s.id}`}
@@ -61,7 +70,7 @@ export default function HrStaffListPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {SAMPLE_STAFF.map((s) => (
+            {staff.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="text-foreground">{s.name}</TableCell>
                 <TableCell className="text-muted-foreground">{s.position}</TableCell>
