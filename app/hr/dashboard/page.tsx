@@ -150,18 +150,18 @@ export default function HrDashboardPage() {
               Recent Warnings Issued
             </h2>
             {outletWarnings.length > 0 ? (
-              <ul className="m-0 list-none space-y-3 p-0">
+              <ul className="m-0 list-none space-y-2.5 p-0">
                 {outletWarnings.map((warning) => (
                   <li
                     key={warning.id}
-                    className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0"
+                    className="flex items-start justify-between gap-3 border-b border-border pb-2.5 last:border-0 last:pb-0"
                   >
                     <div>
                       <div className="text-sm font-semibold text-foreground">{warning.staffName}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{warning.reason}</div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <StatusBadge label="Warning" tone="warning" />
+                      <StatusBadge label="Warning" tone="danger" />
                       <span className="font-mono text-[10.5px] text-muted-foreground">{warning.date}</span>
                     </div>
                   </li>

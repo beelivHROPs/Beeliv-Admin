@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PageHeading } from "@/components/shared/PageHeading";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SAMPLE_STAFF } from "@/lib/placeholder-data";
 
 export const metadata: Metadata = { title: "Staff" };
@@ -48,23 +49,23 @@ export default function HrStaffListPage() {
         ))}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-lg border border-border bg-card sm:block">
-        <table className="min-w-full divide-y divide-border text-sm">
-          <thead className="bg-muted/50 text-left text-xs font-medium uppercase text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Position</th>
-              <th className="px-4 py-2">Documentation</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
+      <div className="hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Position</TableHead>
+              <TableHead>Documentation</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {SAMPLE_STAFF.map((s) => (
-              <tr key={s.id}>
-                <td className="px-4 py-2 text-foreground">{s.name}</td>
-                <td className="px-4 py-2 text-muted-foreground">{s.position}</td>
-                <td className="px-4 py-2">
+              <TableRow key={s.id}>
+                <TableCell className="text-foreground">{s.name}</TableCell>
+                <TableCell className="text-muted-foreground">{s.position}</TableCell>
+                <TableCell>
                   <StatusBadge
                     label={s.documentationStatus}
                     tone={
@@ -73,25 +74,25 @@ export default function HrStaffListPage() {
                         : "warning"
                     }
                   />
-                </td>
-                <td className="px-4 py-2">
+                </TableCell>
+                <TableCell>
                   <StatusBadge
                     label={s.employmentStatus}
                     tone={s.employmentStatus === "Active" ? "success" : "info"}
                   />
-                </td>
-                <td className="px-4 py-2 text-right">
+                </TableCell>
+                <TableCell className="text-right">
                   <Link
                     href={`/hr/staff/${s.id}`}
                     className="font-medium text-primary hover:underline"
                   >
                     View →
                   </Link>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

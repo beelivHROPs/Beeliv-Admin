@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/shared/PageHeading";
-import { Card } from "@/components/shared/Card";
+import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { Button } from "@/components/ui/button";
 import { SAMPLE_STAFF } from "@/lib/placeholder-data";
 
 type Params = { id: string };
@@ -24,6 +25,11 @@ export async function generateMetadata({
  * fields: whether Assigned HR may access them is the single highest-priority
  * unresolved question across the whole project (rbac.md §11, STAGE-1-MASTER-
  * PLAN.md §5 item A.1). Do not add those fields here without that decision.
+ *
+ * Restyled onto the app's current design-system tokens/Card — this page had
+ * never been updated since the raw-gray/blue-600 prototype pass and looked
+ * like a different app next to the rest of the dashboard (spacing audit
+ * follow-up).
  */
 export default async function HrStaffDetailPage({
   params,
@@ -38,10 +44,10 @@ export default async function HrStaffDetailPage({
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <Link
         href="/hr/staff"
-        className="text-sm font-medium text-blue-600 hover:underline"
+        className="text-sm font-medium text-primary hover:underline"
       >
         ← Back to Staff
       </Link>
@@ -49,52 +55,62 @@ export default async function HrStaffDetailPage({
       <PageHeading title={staff.name} description={staff.position} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card title="Profile">
-          <dl className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Outlet</dt>
-              <dd className="text-gray-900">{staff.outlet}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Position</dt>
-              <dd className="text-gray-900">{staff.position}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Status</dt>
-              <dd>
-                <StatusBadge
-                  label={staff.employmentStatus}
-                  tone={
-                    staff.employmentStatus === "Active" ? "success" : "info"
-                  }
-                />
-              </dd>
-            </div>
-          </dl>
+        <Card>
+          <CardContent>
+            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Profile
+            </h2>
+            <dl className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Outlet</dt>
+                <dd className="font-medium text-foreground">{staff.outlet}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Position</dt>
+                <dd className="font-medium text-foreground">{staff.position}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd>
+                  <StatusBadge
+                    label={staff.employmentStatus}
+                    tone={
+                      staff.employmentStatus === "Active" ? "success" : "info"
+                    }
+                  />
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
         </Card>
 
-        <Card title="Documentation">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-700">Onboarding documentation</span>
-            <StatusBadge
-              label={staff.documentationStatus}
-              tone={
-                staff.documentationStatus === "Complete" ? "success" : "warning"
-              }
-            />
-          </div>
+        <Card>
+          <CardContent>
+            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Documentation
+            </h2>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Onboarding documentation</span>
+              <StatusBadge
+                label={staff.documentationStatus}
+                tone={
+                  staff.documentationStatus === "Complete" ? "success" : "warning"
+                }
+              />
+            </div>
+          </CardContent>
         </Card>
       </div>
 
       <div className="mt-6">
-        <button
+        <Button
           type="button"
+          variant="outline"
           disabled
           title="Not implemented in this slice — requires recruitment/HR authority decisions"
-          className="cursor-not-allowed rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-400"
         >
           Issue Warning
-        </button>
+        </Button>
       </div>
     </div>
   );
