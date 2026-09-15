@@ -1,4 +1,5 @@
 import { DASHBOARD_TONE_BASE } from "@/lib/dashboard-accent";
+import { cn } from "@/lib/utils";
 
 /**
  * Bold gradient "hero stat" card — project-lead reference: the Mintora
@@ -16,6 +17,7 @@ export function HeroStatCard({
   caption,
   badge,
   tone = "purple",
+  className,
 }: {
   eyebrow: React.ReactNode;
   title: string;
@@ -23,15 +25,17 @@ export function HeroStatCard({
   valueLabel: string;
   caption?: React.ReactNode;
   badge?: React.ReactNode;
-  /** Matches the dashboard's own AppShell navTone — only "gold" (HR) is
-   *  wired up so far; other tones are reserved for when this rolls out to
-   *  Ops/Staff/Client. */
+  /** Matches the dashboard's own AppShell navTone — this now rolled out to
+   *  Ops (tone="purple") too, alongside HR (tone="gold"). */
   tone?: "purple" | "gold" | "lavender" | "slate";
+  /** Extra classes, e.g. a softer radius on one dashboard without
+   *  reshaping this card for every dashboard that uses it. */
+  className?: string;
 }) {
   const base = DASHBOARD_TONE_BASE[tone];
   return (
     <div
-      className="relative overflow-hidden rounded-2xl px-5 py-5 text-white sm:px-6 sm:py-6"
+      className={cn("relative overflow-hidden rounded-2xl px-5 py-5 text-white sm:px-6 sm:py-6", className)}
       style={{
         // Clean single-hue gradient (light -> dark) built from the
         // dashboard's own tone token. Blending --gold and --primary via
@@ -54,15 +58,15 @@ export function HeroStatCard({
         }`}
       />
       <div className="relative">
-        <p className="flex items-center gap-1 text-[11px] font-semibold tracking-wide text-white/70 uppercase">
+        <p className="flex items-center gap-1 text-sm font-semibold tracking-wide text-white/70 uppercase">
           {eyebrow}
         </p>
         <h1 className="font-heading mt-1 text-lg font-semibold text-white/90">{title}</h1>
         <div className="font-heading mt-3 text-4xl font-bold tracking-tight">{value}</div>
         <p className="mt-1 text-sm text-white/70">{valueLabel}</p>
-        {caption ? <p className="mt-3 text-xs text-white/60">{caption}</p> : null}
+        {caption ? <p className="mt-3 text-sm text-white/60">{caption}</p> : null}
         {badge ? (
-          <span className="mt-3 inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white">
+          <span className="mt-3 inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-sm font-medium text-white">
             {badge}
           </span>
         ) : null}

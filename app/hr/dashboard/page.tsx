@@ -28,6 +28,19 @@ export const metadata: Metadata = { title: "Dashboard" };
  * Beeliv-wide. Only aggregate counts appear here; no per-person sensitive
  * fields (NIN, banking) — that's a Staff Detail screen concern, out of
  * scope on a dashboard.
+ *
+ * Visual pass adapting two Pinterest references ("Nixtio"/Crextio HR
+ * dashboard, a "healthy team cultures" concept) into Beeliv's own purple/
+ * gold palette — project-lead: "adapt them buh still using our brand
+ * colors." Adapted STYLE only (dark contrast card for the one ring widget,
+ * color-coded legend rows for the reason breakdown, softer card radius),
+ * not every widget those references show: neither reference's welcome
+ * banner has a real Beeliv photo/name to put in it (no auth/user-profile
+ * data exists yet), and their meetings/activity-feed/shoutouts/
+ * compensation/devices widgets have no corresponding confirmed capability
+ * in rbac.md — adding those would be fabricating features, which the
+ * project rules explicitly rule out. Same "Staff Overview / Attendance
+ * Today / Recent Warnings Issued" real widgets as before, re-skinned.
  */
 export default function HrDashboardPage() {
   const outlet = "Sample Outlet 1";
@@ -57,6 +70,18 @@ export default function HrDashboardPage() {
   ).sort((a, b) => b[1] - a[1]);
   const maxReasonCount = Math.max(1, ...warningsByReason.map(([, count]) => count));
 
+  // Qualitative palette for the reason legend rows — the app's existing
+  // 5-color chart token set (globals.css --chart-1..5, already tuned to the
+  // brand), cycled per reason. Same real per-reason counts as before, just
+  // color-coded like a donut legend instead of one flat gold bar.
+  const REASON_COLORS = [
+    "var(--chart-2)",
+    "var(--chart-4)",
+    "var(--chart-1)",
+    "var(--chart-3)",
+    "var(--chart-5)",
+  ];
+
   return (
     <div className="mx-auto max-w-5xl">
       {/* Hero row — Mintora-reference gradient stat card (outlet name +
@@ -78,9 +103,15 @@ export default function HrDashboardPage() {
           caption="Everything below is scoped to your assigned outlet only."
           badge={`${incompleteCount} onboarding incomplete`}
         />
-        <Card>
+        {/* Dark contrast card — project-lead reference: the "Nixtio"/"PBD"
+            dashboards each give their one ring/donut widget a dark navy
+            card instead of white, so it reads as the focal metric among
+            lighter tiles. Same real onboardingPercent value as before,
+            just re-skinned — the ring's white->gold gradient already
+            reads clearly against a dark ground. */}
+        <Card className="rounded-2xl bg-[color:var(--chart-3)] shadow-sm ring-0">
           <CardContent className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="text-sm font-semibold tracking-wide text-white/60 uppercase">
               Onboarding Completion
             </h2>
             <ProgressRing
@@ -88,8 +119,9 @@ export default function HrDashboardPage() {
               size={104}
               tone="gold"
               showCenterLabel
+              centerLabelClassName="text-lg font-bold text-white"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-white/60">
               {staff.length - incompleteCount} of {staff.length} staff complete
             </p>
           </CardContent>
@@ -97,12 +129,13 @@ export default function HrDashboardPage() {
       </div>
 
       {/* Key metrics — staggered entrance, ~70ms/tile (design-system.md §15). */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 duo:grid-cols-3 sm:grid-cols-4">
         {[
           <MetricCard
             key="staff"
             icon={Users}
             iconTone="gold"
+            chipShape="circle"
             label="Staff Overview"
             value={<CountUp value={staff.length} />}
             caption={`${incompleteCount} onboarding incomplete · ${onboardingCount} onboarding total`}
@@ -111,6 +144,7 @@ export default function HrDashboardPage() {
             key="attendance"
             icon={Clock}
             iconTone="gold"
+            chipShape="circle"
             label="Attendance Today"
             value={
               <>
@@ -123,6 +157,7 @@ export default function HrDashboardPage() {
             key="warnings"
             icon={AlertTriangle}
             iconTone="destructive"
+            chipShape="circle"
             label="Recent Warnings Issued"
             value={<CountUp value={outletWarnings.length} />}
             caption="This period"
@@ -131,6 +166,7 @@ export default function HrDashboardPage() {
             key="scope"
             icon={MapPin}
             iconTone="gold"
+            chipShape="circle"
             label="Outlet Scope"
             value={<span className="text-sm font-medium">{outlet}</span>}
             caption="Your assigned outlet — you don't have visibility into other outlets."
@@ -144,9 +180,9 @@ export default function HrDashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card>
+        <Card className="rounded-2xl shadow-sm ring-0">
           <CardContent>
-            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               Recent Warnings Issued
             </h2>
             {outletWarnings.length > 0 ? (
@@ -158,11 +194,11 @@ export default function HrDashboardPage() {
                   >
                     <div>
                       <div className="text-sm font-semibold text-foreground">{warning.staffName}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">{warning.reason}</div>
+                      <div className="mt-0.5 text-sm text-muted-foreground">{warning.reason}</div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <StatusBadge label="Warning" tone="danger" />
-                      <span className="font-mono text-[10.5px] text-muted-foreground">{warning.date}</span>
+                      <span className="font-mono text-sm text-muted-foreground">{warning.date}</span>
                     </div>
                   </li>
                 ))}
@@ -174,9 +210,9 @@ export default function HrDashboardPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-2xl shadow-sm ring-0">
             <CardContent>
-              <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Quick Actions
               </h2>
               <div className="flex flex-col gap-2">
@@ -200,26 +236,34 @@ export default function HrDashboardPage() {
               repeated widget shape (project-lead: "you don't have to use
               same design for all dashboards"). */}
           {warningsByReason.length > 0 ? (
-            <Card>
+            <Card className="rounded-2xl shadow-sm ring-0">
               <CardContent>
-                <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   Warnings by Reason
                 </h2>
                 <ul className="m-0 list-none space-y-2 p-0">
-                  {warningsByReason.map(([reason, count]) => (
-                    <li key={reason} className="flex items-center gap-2.5">
-                      <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{reason}</span>
-                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  {warningsByReason.map(([reason, count], i) => {
+                    const color = REASON_COLORS[i % REASON_COLORS.length];
+                    return (
+                      <li key={reason} className="flex items-center gap-2.5">
                         <span
-                          className="block h-full rounded-full bg-[color:var(--tone-gold)]"
-                          style={{ width: `${(count / maxReasonCount) * 100}%` }}
+                          aria-hidden="true"
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: color }}
                         />
-                      </span>
-                      <span className="w-4 shrink-0 text-right text-xs font-semibold text-foreground">
-                        {count}
-                      </span>
-                    </li>
-                  ))}
+                        <span className="w-24 shrink-0 truncate text-sm text-muted-foreground">{reason}</span>
+                        <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{ width: `${(count / maxReasonCount) * 100}%`, backgroundColor: color }}
+                          />
+                        </span>
+                        <span className="w-4 shrink-0 text-right text-sm font-semibold text-foreground">
+                          {count}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </CardContent>
             </Card>

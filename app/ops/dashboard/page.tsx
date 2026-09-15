@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Briefcase, Building2, ClipboardList, Globe, Users } from "lucide-react";
+import { Briefcase, Building2, ClipboardList, Globe, MapPin, TrendingUp, User, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { MetricCard } from "@/components/shared/MetricCard";
@@ -8,6 +8,7 @@ import { CountUp } from "@/components/shared/CountUp";
 import { PipelineBarChart } from "@/components/shared/PipelineBarChart";
 import { ProgressRing } from "@/components/shared/ProgressRing";
 import { HeroStatCard } from "@/components/shared/HeroStatCard";
+import { PlaceholderWidgetCard } from "@/components/shared/PlaceholderWidgetCard";
 import {
   SAMPLE_STAFF,
   SAMPLE_JOB_LISTINGS,
@@ -28,6 +29,13 @@ export const metadata: Metadata = { title: "Dashboard" };
  * This is the only role without an outlet boundary — deliberately no
  * single-outlet framing anywhere (unlike Assigned HR/Client): the header
  * reads "All Outlets" / Beeliv-wide, never a specific outlet name.
+ *
+ * Visual pass matching the HR dashboard's adapted Pinterest reference
+ * (app/hr/dashboard/page.tsx's doc comment) — same dark contrast card for
+ * the one ring widget, same rounded-2xl/shadow-sm card treatment, same
+ * circular icon chips. "Staff Distribution by Outlet" already had
+ * color-coded legend rows before this pass (SEGMENT_COLORS), so it's
+ * unchanged here.
  */
 export default function OpsDashboardPage() {
   const totalStaff = SAMPLE_STAFF.length;
@@ -70,9 +78,9 @@ export default function OpsDashboardPage() {
           caption="Organization-wide overview — every client organization and outlet, unrestricted."
           badge={`${openPositions} open positions`}
         />
-        <Card>
+        <Card className="rounded-2xl border-none bg-[color:var(--chart-3)] shadow-sm">
           <CardContent className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="text-sm font-semibold tracking-wide text-white/60 uppercase">
               Pipeline Progress
             </h2>
             <ProgressRing
@@ -80,21 +88,32 @@ export default function OpsDashboardPage() {
               size={104}
               tone="purple"
               showCenterLabel
+              centerLabelClassName="text-lg font-bold text-white"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-white/60">
               {advancedCount} of {pipelineTotal} applicants past initial application
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Key metrics — staggered entrance, ~70ms/tile (design-system.md §15). */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* Key metrics — staggered entrance, ~70ms/tile (design-system.md §15).
+          Pulled back from solid-fill tiles (project-lead: "doesn't look
+          good, just looks like a bunch of modals or cards" — four
+          consecutive solid blocks, with --tone-gold being the same purple
+          as --primary in this token setup, read as one repetitive wall of
+          purple rather than a rich dashboard). Back to light cards with a
+          colored icon chip, same language HR already uses — the hero card
+          and the dark Pipeline Progress ring stay as the two bold accent
+          moments instead of competing with four more. Same real counts as
+          before, just less visual weight. */}
+      <div className="mb-4 grid grid-cols-2 gap-3 duo:grid-cols-3 sm:grid-cols-4">
         {[
           <MetricCard
             key="staff"
             icon={Users}
             iconTone="purple"
+            chipShape="circle"
             label="Total Staff"
             value={<CountUp value={totalStaff} />}
             caption="Across all outlets"
@@ -103,6 +122,7 @@ export default function OpsDashboardPage() {
             key="outlets"
             icon={Building2}
             iconTone="purple"
+            chipShape="circle"
             label="Outlets"
             value={<CountUp value={SAMPLE_OUTLETS_COUNT} />}
             caption="Beeliv-wide"
@@ -111,6 +131,7 @@ export default function OpsDashboardPage() {
             key="orgs"
             icon={Briefcase}
             iconTone="purple"
+            chipShape="circle"
             label="Client Organizations"
             value={<CountUp value={SAMPLE_CLIENT_ORGANIZATIONS_COUNT} />}
             caption="Active clients"
@@ -119,6 +140,7 @@ export default function OpsDashboardPage() {
             key="positions"
             icon={ClipboardList}
             iconTone="purple"
+            chipShape="circle"
             label="Open Positions"
             value={<CountUp value={openPositions} />}
             caption="Across the recruitment pipeline"
@@ -130,10 +152,33 @@ export default function OpsDashboardPage() {
         ))}
       </div>
 
+      {/* "Team Snapshot" / "Recruitment Trend" — the Jobie reference's
+          per-person profile-stats card and its wavy weekly trend chart.
+          Neither has real data behind it yet: Team Snapshot needs a real
+          logged-in user (no auth/user-profile data exists in Stage 1) and
+          is arguably a Staff "My Profile" concept anyway, not an Ops-wide
+          one; Recruitment Trend needs real week-by-week historical
+          numbers (SAMPLE_RECRUITMENT_PIPELINE is only current stage
+          totals). Project-lead: "put the placeholders and we'll do the
+          functionality in stage 2" — explicit "Coming in Stage 2" cards
+          instead of fabricated numbers filling the shape. */}
+      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+        <PlaceholderWidgetCard
+          icon={User}
+          title="Team Snapshot"
+          description="A per-user profile summary will live here once account/auth data exists (Stage 2)."
+        />
+        <PlaceholderWidgetCard
+          icon={TrendingUp}
+          title="Recruitment Trend"
+          description="Week-by-week application/interview trends will appear here once historical pipeline tracking is built (Stage 2)."
+        />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card>
+        <Card className="rounded-2xl shadow-sm ring-0">
           <CardContent>
-            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               Recruitment Pipeline
             </h2>
             {/* Real recharts bar chart (project-lead: "high-end data
@@ -144,7 +189,7 @@ export default function OpsDashboardPage() {
             <PipelineBarChart data={SAMPLE_RECRUITMENT_PIPELINE} />
             <Link
               href="/ops/recruitment-pipeline"
-              className={buttonVariants({ variant: "outline", className: "mt-2" })}
+              className={buttonVariants({ variant: "outline", className: "mt-2 rounded-full" })}
             >
               View Recruitment Pipeline
             </Link>
@@ -152,25 +197,28 @@ export default function OpsDashboardPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="rounded-2xl shadow-sm ring-0">
             <CardContent>
-              <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Quick Actions
               </h2>
               <div className="flex flex-col gap-2">
-                <Link href="/ops/organizations" className={buttonVariants()}>
+                <Link href="/ops/organizations" className={buttonVariants({ className: "rounded-full" })}>
                   View Client Organizations
                 </Link>
-                <Link href="/ops/staff" className={buttonVariants({ variant: "outline" })}>
+                <Link
+                  href="/ops/staff"
+                  className={buttonVariants({ variant: "outline", className: "rounded-full" })}
+                >
                   View Global Staff Directory
                 </Link>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl shadow-sm ring-0">
             <CardContent>
-              <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Operational Reports
               </h2>
               <ul className="m-0 list-none space-y-1.5 p-0 text-sm">
@@ -198,26 +246,41 @@ export default function OpsDashboardPage() {
               its own Recruitment Pipeline widget's shape (project-lead:
               "you don't have to use same design for all dashboards"). */}
           {totalStaff > 0 ? (
-            <Card>
+            <Card className="rounded-2xl shadow-sm ring-0">
               <CardContent>
-                <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   Staff Distribution by Outlet
                 </h2>
-                <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
-                  {staffByOutlet.map(([outletName, count], i) => (
-                    <span
-                      key={outletName}
-                      className="h-full first:rounded-l-full last:rounded-r-full"
-                      style={{
-                        width: `${(count / totalStaff) * 100}%`,
-                        backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-                      }}
-                    />
-                  ))}
+                {/* Callout badge over the largest outlet's segment — same
+                    idea as a reference dashboard's highlighted-bar tooltip,
+                    adapted to a real value from staffByOutlet (already
+                    sorted descending, so index 0 is the largest) instead
+                    of an invented one. */}
+                <div className="relative pt-6">
+                  <div
+                    className="absolute top-0 flex justify-center"
+                    style={{ left: 0, width: `${(staffByOutlet[0][1] / totalStaff) * 100}%` }}
+                  >
+                    <span className="whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold text-background shadow-sm">
+                      {staffByOutlet[0][1]} at {staffByOutlet[0][0]}
+                    </span>
+                  </div>
+                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                    {staffByOutlet.map(([outletName, count], i) => (
+                      <span
+                        key={outletName}
+                        className="h-full first:rounded-l-full last:rounded-r-full"
+                        style={{
+                          width: `${(count / totalStaff) * 100}%`,
+                          backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
                 <ul className="mt-3 space-y-1.5">
                   {staffByOutlet.map(([outletName, count], i) => (
-                    <li key={outletName} className="flex items-center justify-between gap-2 text-xs">
+                    <li key={outletName} className="flex items-center justify-between gap-2 text-sm">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span
                           className="size-2 shrink-0 rounded-full"
@@ -236,6 +299,40 @@ export default function OpsDashboardPage() {
           ) : null}
         </div>
       </div>
+
+      {/* "Recommended Jobs" from the reference, built with real data
+          (SAMPLE_JOB_LISTINGS — the same listings the public /positions
+          pages show), unlike the two placeholders above. */}
+      {SAMPLE_JOB_LISTINGS.length > 0 ? (
+        <div className="mt-4">
+          <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+            Open Positions
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {SAMPLE_JOB_LISTINGS.map((job) => (
+              <Card key={job.id} className="rounded-xl shadow-none ring-0 sm:rounded-2xl sm:shadow-sm">
+                <CardContent>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">{job.title}</h3>
+                    <Briefcase className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.25} />
+                  </div>
+                  <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    {job.location}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{job.summary}</p>
+                  <Link
+                    href={`/positions/${job.id}`}
+                    className="mt-3 inline-flex items-center text-sm font-medium text-primary hover:underline"
+                  >
+                    View Posting →
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
