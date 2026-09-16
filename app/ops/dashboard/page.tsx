@@ -112,7 +112,7 @@ export default function OpsDashboardPage() {
           <MetricCard
             key="staff"
             icon={Users}
-            iconTone="purple"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Total Staff"
             value={<CountUp value={totalStaff} />}
@@ -121,7 +121,7 @@ export default function OpsDashboardPage() {
           <MetricCard
             key="outlets"
             icon={Building2}
-            iconTone="purple"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Outlets"
             value={<CountUp value={SAMPLE_OUTLETS_COUNT} />}
@@ -130,7 +130,7 @@ export default function OpsDashboardPage() {
           <MetricCard
             key="orgs"
             icon={Briefcase}
-            iconTone="purple"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Client Organizations"
             value={<CountUp value={SAMPLE_CLIENT_ORGANIZATIONS_COUNT} />}
@@ -139,7 +139,7 @@ export default function OpsDashboardPage() {
           <MetricCard
             key="positions"
             icon={ClipboardList}
-            iconTone="purple"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Open Positions"
             value={<CountUp value={openPositions} />}
@@ -161,8 +161,12 @@ export default function OpsDashboardPage() {
           numbers (SAMPLE_RECRUITMENT_PIPELINE is only current stage
           totals). Project-lead: "put the placeholders and we'll do the
           functionality in stage 2" — explicit "Coming in Stage 2" cards
-          instead of fabricated numbers filling the shape. */}
-      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+          instead of fabricated numbers filling the shape. Split 1fr/2fr,
+          not an even 50/50 (project-lead: "the recruitment trend should
+          be bigger than the profile just like our reference") — Jobie's
+          own profile card is a narrow column next to a noticeably wider
+          chart card, not an equal pair. */}
+      <div className="mb-4 grid gap-4 sm:grid-cols-[1fr_2fr]">
         <PlaceholderWidgetCard
           icon={User}
           title="Team Snapshot"
@@ -202,7 +206,27 @@ export default function OpsDashboardPage() {
               <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Quick Actions
               </h2>
-              <div className="flex flex-col gap-2">
+
+              {/* Mobile: horizontal icon-grid actions (same pattern as
+                  HR's — project-lead's synthesized mobile reference, the
+                  "banking/wallet app"'s icon-row). Desktop keeps the
+                  stacked buttons. */}
+              <div className="flex gap-6 sm:hidden">
+                <Link href="/ops/organizations" className="flex flex-1 flex-col items-center gap-1.5">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-primary text-white shadow-[2px_2px_5px_rgba(0,0,0,0.18),-1px_-1px_4px_rgba(255,255,255,0.25)]">
+                    <Building2 className="h-5 w-5" strokeWidth={2.25} />
+                  </span>
+                  <span className="text-xs font-medium text-foreground">Organizations</span>
+                </Link>
+                <Link href="/ops/staff" className="flex flex-1 flex-col items-center gap-1.5">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-muted text-foreground shadow-[2px_2px_5px_rgba(0,0,0,0.1),-1px_-1px_4px_rgba(255,255,255,0.7)]">
+                    <Users className="h-5 w-5" strokeWidth={2.25} />
+                  </span>
+                  <span className="text-xs font-medium text-foreground">Staff Directory</span>
+                </Link>
+              </div>
+
+              <div className="hidden flex-col gap-2 sm:flex">
                 <Link href="/ops/organizations" className={buttonVariants({ className: "rounded-full" })}>
                   View Client Organizations
                 </Link>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Clock, MapPin, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, FileBarChart, MapPin, User, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { buttonVariants } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { MetricCard } from "@/components/shared/MetricCard";
 import { CountUp } from "@/components/shared/CountUp";
 import { ProgressRing } from "@/components/shared/ProgressRing";
 import { HeroStatCard } from "@/components/shared/HeroStatCard";
+import { PlaceholderWidgetCard } from "@/components/shared/PlaceholderWidgetCard";
 import { SAMPLE_STAFF, SAMPLE_ATTENDANCE_TODAY, SAMPLE_WARNINGS } from "@/lib/placeholder-data";
 import { DASHBOARD_ACCENT_BG } from "@/lib/dashboard-accent";
 
@@ -134,7 +135,7 @@ export default function HrDashboardPage() {
           <MetricCard
             key="staff"
             icon={Users}
-            iconTone="gold"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Staff Overview"
             value={<CountUp value={staff.length} />}
@@ -143,7 +144,7 @@ export default function HrDashboardPage() {
           <MetricCard
             key="attendance"
             icon={Clock}
-            iconTone="gold"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Attendance Today"
             value={
@@ -156,7 +157,7 @@ export default function HrDashboardPage() {
           <MetricCard
             key="warnings"
             icon={AlertTriangle}
-            iconTone="destructive"
+            iconTone="destructive-solid"
             chipShape="circle"
             label="Recent Warnings Issued"
             value={<CountUp value={outletWarnings.length} />}
@@ -165,7 +166,7 @@ export default function HrDashboardPage() {
           <MetricCard
             key="scope"
             icon={MapPin}
-            iconTone="gold"
+            iconTone="purple-solid"
             chipShape="circle"
             label="Outlet Scope"
             value={<span className="text-sm font-medium">{outlet}</span>}
@@ -198,7 +199,7 @@ export default function HrDashboardPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <StatusBadge label="Warning" tone="danger" />
-                      <span className="font-mono text-sm text-muted-foreground">{warning.date}</span>
+                      <span className="text-sm font-medium text-muted-foreground">{warning.date}</span>
                     </div>
                   </li>
                 ))}
@@ -210,12 +211,52 @@ export default function HrDashboardPage() {
         </Card>
 
         <div className="space-y-4">
+          {/* "Team Snapshot" — the Jobie reference's per-person profile-
+              stats card (project-lead: "you can see how they placed the
+              profile??"). No real logged-in user/photo data exists yet
+              (Stage 1, no auth), so this stays an explicit "Coming in
+              Stage 2" placeholder rather than a fabricated name/photo/
+              stats. Moved here (this sidebar column, alongside Quick
+              Actions/Warnings by Reason) instead of its own full-width
+              row — capping its width there left a dead empty gap next to
+              it (project-lead: "we can't leave a dead space here"); this
+              column is already the narrow one, so the card is naturally
+              profile-card-proportioned without a special max-width hack. */}
+          <PlaceholderWidgetCard
+            icon={User}
+            title="Team Snapshot"
+            description="A per-user profile summary will live here once account/auth data exists (Stage 2)."
+          />
+
           <Card className="rounded-2xl shadow-sm ring-0">
             <CardContent>
               <h2 className="mb-2.5 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Quick Actions
               </h2>
-              <div className="flex flex-col gap-2">
+
+              {/* Mobile: horizontal icon-grid actions (project-lead's
+                  synthesized mobile reference — the "banking/wallet app"'s
+                  Top-up/Transfer/Received/Send row) instead of stacked
+                  full-width buttons, which read as heavy on a phone.
+                  Desktop (sm: and up) keeps the original stacked buttons —
+                  a row of two icons alone would look sparse/unbalanced at
+                  that width. */}
+              <div className="flex gap-6 sm:hidden">
+                <Link href="/hr/staff" className="flex flex-1 flex-col items-center gap-1.5">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-[color:var(--tone-gold)] text-white shadow-[2px_2px_5px_rgba(0,0,0,0.18),-1px_-1px_4px_rgba(255,255,255,0.25)]">
+                    <Users className="h-5 w-5" strokeWidth={2.25} />
+                  </span>
+                  <span className="text-xs font-medium text-foreground">View Staff</span>
+                </Link>
+                <Link href="/hr/reports" className="flex flex-1 flex-col items-center gap-1.5">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-muted text-foreground shadow-[2px_2px_5px_rgba(0,0,0,0.1),-1px_-1px_4px_rgba(255,255,255,0.7)]">
+                    <FileBarChart className="h-5 w-5" strokeWidth={2.25} />
+                  </span>
+                  <span className="text-xs font-medium text-foreground">Reports</span>
+                </Link>
+              </div>
+
+              <div className="hidden flex-col gap-2 sm:flex">
                 {/* bg matches this dashboard's own nav color (navTone="gold"
                     on AppShell, app/hr/layout.tsx) — project-lead: primary
                     actions should read as belonging to their dashboard. */}
