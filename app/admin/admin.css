@@ -1245,3 +1245,26 @@ body:has(main [data-admin-detail]) .ap-bnav {
   .ad-dtable > [role="row"]:nth-child(2) { border-top: 0; }
   .ad-dtable [role="row"] .truncate { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* Shared notices belong to the Admin workspace, including portalled dialogs.
+   Keep semantic error/warning colours; use Mulberry for neutral notices and actions. */
+.admin-theme .st,
+html.admin-app .st {
+  --st-surface: var(--ap-surface, #fff);
+  --st-ink: var(--ap-ink, #1f1a20);
+  --st-muted: var(--ap-muted, #71656e);
+  --st-border: var(--ap-line, #e8dde3);
+  --st-info-tint: var(--ap-tint-soft, var(--admin-soft-2));
+  --st-accent: var(--admin-fill, var(--admin-primary));
+  --st-accent-hover: var(--admin-fill-hover, var(--admin-primary-hover));
+}
+html[data-admin-theme="dark"].admin-app .st,
+html[data-admin-theme="dark"] .admin-theme .st {
+  --st-surface: var(--ap-surface, #1c1217);
+  --st-ink: var(--ap-ink, #f4eef1);
+  --st-muted: var(--ap-muted, #b3a3ac);
+  --st-border: var(--ap-line, #36212b);
+  --st-info-tint: var(--ap-tint-soft, #211019);
+  --st-accent: var(--admin-fill, var(--admin-primary));
+  --st-accent-hover: var(--admin-fill-hover, #a4306a);
+}
