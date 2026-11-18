@@ -1,6 +1,7 @@
 "use client";
 
 /** Shared pieces of the invite sheets: a checkbox row and the result panel that shows the invitation link. */
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { useState, type ReactNode } from "react";
 import { PrimaryButton } from "@/components/admin/offers/Sheet";
 import { Disc } from "@/components/admin/overview/Disc";
@@ -25,17 +26,18 @@ export function Checkbox({ id, checked, onChange, children }: { id: string; chec
  * emails nothing in the demo ("Email delivery is connected later").
  */
 export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onClose: () => void }) {
+  const liveMode = teamAccessMode() === "live";
   const [inv, setInv] = useState(first);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sent = inv.delivery.status !== "not-sent";
+  const sent = liveMode ? inv.delivery.status === "queued" || inv.delivery.status === "sent" || inv.delivery.status === "copied" : inv.delivery.status !== "not-sent";
   async function send() {
     setBusy(true);
     setError(null);
     try {
-      setInv(await sendInvitation(inv.id));
+      setInv(await sendInvitation(inv.id, inv.revision));
     } catch {
-      setError("We could not send the invitation. Nothing was changed. Please try again.");
+      setError("We could not confirm sending. Check Invitations before trying again.");
     } finally {
       setBusy(false);
     }
@@ -47,7 +49,7 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
         <p className="min-w-0 text-[14px] leading-snug text-(--ap-ink)">
           {sent ? (
             <>
-              <b>Invitation sent (recorded)</b> for {inv.name} ({inv.email}). Email delivery is connected later, so nothing was emailed. You can resend or revoke it from Invitations.
+              {liveMode ? <><b>{inv.delivery.status === "copied" ? "Access link created" : inv.delivery.status === "queued" ? "Invitation queued for delivery" : "Invitation sent"}</b> for {inv.name}{inv.email ? ` (${inv.email})` : ""}. Check Invitations for the latest status.</> : <><b>Invitation sent (recorded)</b> for {inv.name} ({inv.email}). Email delivery is connected later, so nothing was emailed. You can resend or revoke it from Invitations.</>}
             </>
           ) : (
             <>
@@ -58,7 +60,7 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
       </div>
       <div className="mt-3 flex flex-col gap-2.5 min-[560px]:flex-row min-[560px]:flex-wrap">
         {!sent ? (
-          <button type="button" disabled={busy} onClick={send} className="ap-btn ap-btn-p h-12 text-[15px] font-semibold text-white! min-[560px]:h-11">
+          <button type="button" disabled={busy || (liveMode && inv.actions?.send !== true)} onClick={send} className="ap-btn ap-btn-p h-12 text-[15px] font-semibold text-white! min-[560px]:h-11">
             {busy ? "Working..." : "Send invitation"}
           </button>
         ) : null}

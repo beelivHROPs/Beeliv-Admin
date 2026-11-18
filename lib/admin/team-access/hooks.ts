@@ -67,3 +67,5 @@ export const revokeInvitation = service.revokeInvitation;
 export const setAccountState = service.setAccountState;
 export const updateAccess = service.updateAccess;
 export const getHistory = service.getHistory;
+
+export const getInvitationDetails = service.getInvitationDetails;
