@@ -13,6 +13,14 @@ const BTN = "ap-btn text-[15px] font-semibold";
 /** Raw provider SVG is never injected: it becomes an image data URL. Anything else is refused. */
 function qrSrc(qr: string | null): string | null {
   if (!qr) return null;
+  // Supabase returns "data:image/svg+xml;utf-8,<svg ...>" with the SVG NOT encoded. A raw "#" (colour values) ends a
+  // data URL early, so the browser shows a broken image. Re-encode the SVG part so the QR always renders.
+  const svgData = /^data:image\/svg\+xml[^,]*,/i.exec(qr);
+  if (svgData) {
+    const body = qr.slice(svgData[0].length);
+    const raw = /^\s*</.test(body) ? body : (() => { try { return decodeURIComponent(body); } catch { return body; } })();
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(raw)}`;
+  }
   if (qr.startsWith("data:image/")) return qr;
   if (qr.trimStart().startsWith("<svg")) return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr)}`;
   return null;

@@ -19,7 +19,7 @@ export function parseMfaStatus(value: unknown): MfaStatusResult {
 export function parseMfaEnrollment(value: unknown): MfaEnrollResult {
   const body = asRecord(value); if (body?.ok === false) return authFailure(body, "outcome_unknown");
   const e = asRecord(body?.enrollment);
-  if (body?.ok !== true || !e || typeof e.factorId !== "string" || !uuid.test(e.factorId) || typeof e.qrCode !== "string" || e.qrCode.length > 100000 || !(e.qrCode.startsWith("data:image/") || e.qrCode.startsWith("<svg")) || typeof e.secret !== "string" || !/^[A-Z2-7]{16,128}$/.test(e.secret) || typeof e.uri !== "string" || e.uri.length > 4000 || !e.uri.startsWith("otpauth://totp/")) return authFailure(undefined, "outcome_unknown");
+  if (body?.ok !== true || !e || typeof e.factorId !== "string" || !uuid.test(e.factorId) || typeof e.qrCode !== "string" || e.qrCode.length > 2000000 || !(e.qrCode.startsWith("data:image/") || e.qrCode.startsWith("<svg")) || typeof e.secret !== "string" || !/^[A-Z2-7]{16,128}$/.test(e.secret) || typeof e.uri !== "string" || e.uri.length > 4000 || !e.uri.startsWith("otpauth://totp/")) return authFailure(undefined, "outcome_unknown");
   return { ok: true, enrollment: { factorId: e.factorId, qrCode: e.qrCode, secret: e.secret, uri: e.uri } };
 }
 export function parseMfaVerification(value: unknown): MfaVerifiedResult {
