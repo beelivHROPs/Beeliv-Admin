@@ -13,6 +13,7 @@ import type { AccessLink, DuplicateMatch, AccessPage, AccessPatch, AccessQuery, 
 export interface TeamAccessAdapter {
   subscribe(listener: (event: AdapterEvent) => void): () => void;
   getCapabilities(): Promise<TeamCapabilities>;
+  getInvitation?(id: string, expectedRevision?: number): Promise<Invitation>;
   getFacets(): Promise<TeamFacets>;
   getMatrix(): Promise<AccessMatrix>;
   listInternal(q: AccessQuery): Promise<AccessPage>;
@@ -22,17 +23,17 @@ export interface TeamAccessAdapter {
   /** Rejects when the email already has an active account or a pending invitation. */
   invite(input: InviteInput): Promise<Invitation>;
   /** Creating an invitation never sends it. This is the explicit send (in the demo: recorded only, nothing is emailed). */
-  sendInvitation(id: string): Promise<Invitation>;
+  sendInvitation(id: string, expectedRevision?: number): Promise<Invitation>;
   /** Resend / retry. Rejects with "cooldown" before delivery.retryAt. */
-  resendInvitation(id: string): Promise<Invitation>;
+  resendInvitation(id: string, expectedRevision?: number): Promise<Invitation>;
   /** Copy-link delivery: creates (or regenerates, invalidating the previous link) a single-use link and returns it ONCE. Rejects "cooldown" / "Not available". */
   createAccessLink(id: string, expectedRevision?: number): Promise<AccessLink>;
   /** Fix the address of a failed delivery. */
-  updateInvitationEmail(id: string, email: string): Promise<Invitation>;
+  updateInvitationEmail(id: string, email: string, expectedRevision?: number): Promise<Invitation>;
   /** Issue a replacement for an expired or revoked invitation (a new pending invitation, not yet sent). */
-  replaceInvitation(id: string): Promise<Invitation>;
+  replaceInvitation(id: string, expectedRevision?: number): Promise<Invitation>;
   findDuplicates(input: { name: string; email: string; phone?: string }): Promise<DuplicateMatch[]>;
-  revokeInvitation(id: string, reason: string): Promise<Invitation>;
+  revokeInvitation(id: string, reason: string, expectedRevision?: number): Promise<Invitation>;
   /** Suspend / deactivate / reactivate with a recorded reason. */
   setState(id: string, action: StateAction, reason: string): Promise<void>;
   /** Client outlet scope + access level, or staff / applicant entitlements. */

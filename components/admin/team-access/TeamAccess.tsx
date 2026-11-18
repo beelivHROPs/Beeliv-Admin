@@ -22,6 +22,7 @@ import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { SHOW_PROTOTYPE_CONTROLS } from "@/lib/prototype";
 import { getPreviewAccess, setPreviewAccess, subscribePreviewAccess, type PreviewAccess } from "@/lib/admin/team-access/mock";
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { useTeamCapabilities } from "@/lib/admin/team-access/hooks";
 import type { InvitationKind, TeamCapabilities, TeamTab } from "@/lib/admin/team-access/types";
 import { INVITE_TITLE, InviteSheet } from "./InviteSheets";
@@ -35,16 +36,20 @@ const TAB_INVITE: Partial<Record<TeamTab, InvitationKind>> = { internal: "intern
 
 export function TeamAccess({ initialTab }: { initialTab?: TeamTab }) {
   const url = useUrlParams();
+  const liveMode = teamAccessMode() === "live";
   const raw = url.get("tab");
-  const tab: TeamTab = isTeamTab(raw) ? raw : (initialTab ?? "internal");
+  const tab: TeamTab = isTeamTab(raw) ? raw : (initialTab ?? (liveMode ? "invitations" : "internal"));
   const caps = useTeamCapabilities();
+  const [lastCaps, setLastCaps] = useState<TeamCapabilities | null>(caps.data);
+  if (caps.data && caps.data !== lastCaps) setLastCaps(caps.data);
+  const capabilities = caps.data ?? lastCaps;
   const [inviting, setInviting] = useState<InvitationKind | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const heading = (right?: React.ReactNode) => <PageHeading title="Team & Access" right={right} />;
   if (caps.status === "error") return (<>{heading()}<ErrorPanel title="We could not load Team & Access" retry={caps.retry} /></>);
   if (caps.status === "restricted") return (<>{heading()}<Restricted what="Team & Access" /></>);
-  if (!caps.data) {
+  if (!capabilities) {
     return (
       <div role="status" aria-busy="true" aria-label="Loading Team & Access">
         {heading()}
@@ -53,7 +58,7 @@ export function TeamAccess({ initialTab }: { initialTab?: TeamTab }) {
       </div>
     );
   }
-  const c: TeamCapabilities = caps.data;
+  const c: TeamCapabilities = capabilities;
   const can = (k: InvitationKind) => (k === "internal" ? c.canInviteInternal : k === "client" ? c.canInviteClient : c.canInviteStaff);
   const kinds: InvitationKind[] = tab === "invitations" ? (["internal", "client", "staff"] as const).filter(can) : TAB_INVITE[tab] && can(TAB_INVITE[tab]!) ? [TAB_INVITE[tab]!] : [];
 
@@ -72,7 +77,7 @@ export function TeamAccess({ initialTab }: { initialTab?: TeamTab }) {
     <div>
       {heading(buttons)}
 
-      {!c.canInviteInternal || !c.canChangeState ? (
+      {!liveMode && (!c.canInviteInternal || !c.canChangeState) ? (
         <div className="mb-4 flex flex-col gap-2">
           <NeedsConfirmation>
             Your account can {c.canInviteInternal ? "invite internal users" : "view internal users but not invite them"}
@@ -99,15 +104,16 @@ export function TeamAccess({ initialTab }: { initialTab?: TeamTab }) {
         onChange={(k: TeamTab) => url.set({ tab: k })}
       />
 
-      {tab === "internal" ? <PeopleList key="internal" list="internal" caps={c} onNotice={setNotice} /> : null}
-      {tab === "clients" ? <PeopleList key="clients" list="clients" caps={c} onNotice={setNotice} /> : null}
-      {tab === "accounts" ? <PeopleList key="accounts" list="accounts" caps={c} onNotice={setNotice} /> : null}
+      {!liveMode && tab === "internal" ? <PeopleList key="internal" list="internal" caps={c} onNotice={setNotice} /> : null}
+      {!liveMode && tab === "clients" ? <PeopleList key="clients" list="clients" caps={c} onNotice={setNotice} /> : null}
+      {!liveMode && tab === "accounts" ? <PeopleList key="accounts" list="accounts" caps={c} onNotice={setNotice} /> : null}
+      {liveMode && tab !== "invitations" ? <div className="ap-card rounded-2xl p-6"><h2 className="text-lg font-semibold">Coming soon</h2><p className="mt-2 text-[15px] text-(--ap-muted)">Account lists and access changes are not available here yet. Open Invitations to invite someone or check an invitation.</p></div> : null}
       {tab === "invitations" ? <InvitationsList caps={c} onNotice={setNotice} /> : null}
-      {tab === "roles" ? <RolesMatrix /> : null}
+      {!liveMode && tab === "roles" ? <RolesMatrix /> : null}
 
-      {inviting ? <InviteSheet kind={inviting} onClose={() => setInviting(null)} onDone={() => setNotice({ kind: "ok", text: "Invitation recorded as pending. Email delivery is connected later." })} /> : null}
+      {inviting ? <InviteSheet kind={inviting} onClose={() => setInviting(null)} onDone={() => setNotice({ kind: "ok", text: liveMode ? "Invitation created. Choose Send invitation or create an access link from Invitations." : "Invitation recorded as pending. Email delivery is connected later." })} /> : null}
 
-      {SHOW_PROTOTYPE_CONTROLS ? <PreviewAccessSwitch /> : null}
+      {!liveMode && SHOW_PROTOTYPE_CONTROLS ? <PreviewAccessSwitch /> : null}
     </div>
   );
 }

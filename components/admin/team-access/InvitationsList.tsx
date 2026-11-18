@@ -12,6 +12,7 @@
  *   accepted                -> Manage access
  * Invitations are never sent automatically. Nothing is emailed in the demo.
  */
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { playAdminSound } from "@/lib/admin/sound";
 import { useEffect, useState } from "react";
 import { ANY, BODY_ROW, CARD_ITEM, CARD_LIST, EMPTY_CARD, HEAD_ROW, ListCard, ListToolbar, TABLE_CARD, TH, useBatch } from "@/components/admin/listKit";
@@ -26,7 +27,7 @@ import { StatusChip } from "@/components/client/StatusChip";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { formatDate, formatRelativePast } from "@/lib/applicant/time";
 import { AccessLinkSheet } from "./AccessLinkSheet";
-import { createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
+import { getInvitationDetails, createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
 import type { AccessLink, Invitation, InvitationKind, InvitationStatus, TeamCapabilities } from "@/lib/admin/team-access/types";
 import { DELIVERY_LABEL, DELIVERY_TONE, INVITE_LABEL, INVITE_ORDER, INVITE_TONE, KIND_LABEL, TEAM_HREF } from "./meta";
 
@@ -47,6 +48,7 @@ const LINK_UNKNOWN = "We could not confirm the link was created. Reload this pag
 const wait = (ms: number) => (ms >= 60_000 ? `${Math.ceil(ms / 60_000)} min` : `${Math.max(1, Math.ceil(ms / 1000))} s`);
 
 export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; onNotice: (n: { kind: "ok" | "error"; text: string }) => void }) {
+  const liveMode = teamAccessMode() === "live";
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InvitationStatus | "all">("all");
   const [kind, setKind] = useState<InvitationKind | "">("");
@@ -82,49 +84,53 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
   if (page.workspaceEmpty) {
     return (
       <div className={EMPTY_CARD}>
-        <EmptyState icon={Mail} title="No invitations yet" description="Invitations you create appear here with their status and delivery. Email delivery is connected later." />
+        <EmptyState icon={Mail} title="No invitations yet" description={liveMode ? "Invitations you create appear here with their status and delivery." : "Invitations you create appear here with their status and delivery. Email delivery is connected later."} />
       </div>
     );
   }
 
   const canFor = (k: InvitationKind) => (k === "internal" ? caps.canInviteInternal : k === "client" ? caps.canInviteClient : caps.canInviteStaff);
-  const fail = () => onNotice({ kind: "error", text: "That did not go through. Nothing was changed." });
+  const fail = () => onNotice({ kind: "error", text: "We could not confirm the change. Reload Invitations before trying again." });
 
   async function send(i: Invitation) {
+    if (busy) return;
     const ok = await confirmAction({
       tone: "neutral",
       title: `Send the invitation to ${i.name}?`,
       description: "Invitations are never sent automatically. This sends it now.",
-      points: ["Email delivery is connected later, so in the demo this is recorded only."],
+      points: liveMode ? ["Email delivery must be enabled before this can be queued."] : ["Email delivery is connected later, so in the demo this is recorded only."],
       confirmLabel: "Send invitation",
     });
     if (!ok) return;
+    setBusy(true);
     try {
-      await sendInvitation(i.id);
+      await sendInvitation(i.id, i.revision);
       playAdminSound("saved");
-      onNotice({ kind: "ok", text: `The invitation to ${i.name} was sent (recorded only).` });
+      onNotice({ kind: "ok", text: liveMode ? `The invitation to ${i.name} was queued for delivery.` : `The invitation to ${i.name} was sent (recorded only).` });
     } catch {
       fail();
-    }
+    } finally { setBusy(false); }
   }
   async function resend(i: Invitation) {
+    if (busy) return;
     const retry = i.delivery.status === "failed";
     const ok = await confirmAction({
       tone: "neutral",
       title: retry ? `Retry sending to ${i.name}?` : `Resend the invitation to ${i.name}?`,
-      description: "The same link is sent again. The button then stays disabled for a short cooldown.",
-      points: ["Email delivery is connected later, so nothing is sent yet."],
+      description: liveMode ? "This creates a new invitation link and queues an email. The previous link stops working." : "The same link is sent again. The button then stays disabled for a short cooldown.",
+      points: liveMode ? ["Email delivery must be enabled. Queued does not mean delivered."] : ["Email delivery is connected later, so nothing is sent yet."],
       confirmLabel: retry ? "Retry sending" : "Resend",
     });
     if (!ok) return;
+    setBusy(true);
     try {
-      await resendInvitation(i.id);
+      await resendInvitation(i.id, i.revision);
       playAdminSound("saved");
-      onNotice({ kind: "ok", text: `The invitation to ${i.name} was ${retry ? "sent again" : "resent"} (recorded only).` });
+      onNotice({ kind: "ok", text: liveMode ? `The invitation to ${i.name} was queued for delivery.` : `The invitation to ${i.name} was ${retry ? "sent again" : "resent"} (recorded only).` });
     } catch (e) {
       if (e instanceof Error && e.message === "cooldown") onNotice({ kind: "error", text: "Please wait for the cooldown to finish before resending." });
       else fail();
-    }
+    } finally { setBusy(false); }
   }
   async function makeLink(i: Invitation) {
     if (busy) return; // a double click cannot submit twice (discrete clicks re-render between taps)
@@ -161,6 +167,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
     }
   }
   async function replace(i: Invitation) {
+    if (busy) return;
     const ok = await confirmAction({
       tone: "neutral",
       title: `Issue a replacement for ${i.name}?`,
@@ -168,25 +175,26 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       confirmLabel: "Issue replacement",
     });
     if (!ok) return;
+    setBusy(true);
     try {
-      await replaceInvitation(i.id);
+      await replaceInvitation(i.id, i.revision);
       playAdminSound("saved");
       onNotice({ kind: "ok", text: `A replacement invitation for ${i.name} was created. It has not been sent yet.` });
     } catch {
       fail();
-    }
+    } finally { setBusy(false); }
   }
   async function revoke(reason: string) {
     if (!revoking) return;
     setBusy(true);
     setErr(null);
     try {
-      await revokeInvitation(revoking.id, reason);
+      await revokeInvitation(revoking.id, reason, revoking.revision);
       playAdminSound("rejected");
       onNotice({ kind: "ok", text: `The invitation to ${revoking.name} was revoked.` });
       setRevoking(null);
     } catch {
-      setErr("That did not go through. Nothing was changed. Please try again.");
+      setErr("We could not confirm the change. Reload Invitations before trying again.");
     } finally {
       setBusy(false);
     }
@@ -196,14 +204,25 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
     setBusy(true);
     setErr(null);
     try {
-      await updateInvitationEmail(editing.id, email);
+      await updateInvitationEmail(editing.id, email, editing.revision);
       onNotice({ kind: "ok", text: `The address for ${editing.name} was changed. The invitation has not been sent yet.` });
       setEditing(null);
     } catch (e) {
-      setErr(e instanceof Error && e.message === "duplicate" ? "Another pending invitation already uses that address." : "That did not go through. Nothing was changed. Please try again.");
+      setErr(e instanceof Error && e.message === "duplicate" ? "Another pending invitation already uses that address." : "We could not confirm the change. Reload Invitations before trying again.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadActions(i: Invitation) {
+    if (busy || !page) return;
+    setBusy(true);
+    try {
+      const updated = await getInvitationDetails(i.id, i.revision);
+      live.setData({ ...page, rows: page.rows.map((row) => row.id === i.id ? updated : row) });
+    } catch {
+      onNotice({ kind: "error", text: "We could not confirm the available actions. Reload Invitations and check again." });
+    } finally { setBusy(false); }
   }
 
   /** Primary action as a visible button (so a cooldown can show); the rest in the menu. */
@@ -214,11 +233,13 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
     const menu: { label: string; onSelect?: () => void; href?: string; tone?: "default" | "danger" }[] = [];
     let primary: React.ReactNode = null;
     const btn = "ap-btn ap-btn-s ap-btn-sm whitespace-nowrap";
-    if (i.status === "accepted") {
+    if (liveMode && can && i.status !== "accepted" && !i.actions) {
+      primary = <button type="button" className={btn} disabled={busy} onClick={() => void loadActions(i)}>{busy ? "Checking..." : "Check actions"}</button>;
+    } else if (i.status === "accepted" && !liveMode) {
       menu.push({ label: "Manage access", href: `${TEAM_HREF}?tab=${MANAGE_TAB[i.kind]}` });
-    } else if (can && (i.status === "expired" || i.status === "revoked")) {
+    } else if (can && (!liveMode || i.actions?.replace === true) && (i.status === "expired" || i.status === "revoked")) {
       primary = (
-        <button type="button" className={btn} onClick={() => void replace(i)}>
+        <button type="button" className={btn} disabled={busy} onClick={() => void replace(i)}>
           Issue replacement
         </button>
       );
@@ -241,25 +262,27 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       const linkItem = { label: i.delivery.status === "copied" ? "Create a new access link" : "Create access link", onSelect: () => void makeLink(i) };
       if (i.delivery.status === "not-sent") {
         primary = (
-          <button type="button" className={btn} onClick={() => void send(i)}>
+          <button type="button" className={btn} disabled={busy || (liveMode && i.actions?.send !== true)} onClick={() => void send(i)}>
             Send invitation
           </button>
         );
-        menu.push(linkItem, edit, revokeItem);
+        if (!liveMode || i.actions?.copyLink === true) menu.push(linkItem);
+        if (!liveMode || i.actions?.edit === true) menu.push(edit);
+        if (!liveMode || i.actions?.revoke === true) menu.push(revokeItem);
       } else {
         const label = i.delivery.status === "failed" ? "Retry sending" : "Resend";
         primary = i.delivery.status === "copied" ? (
-          <button type="button" className={btn} disabled={inCooldown} onClick={() => void makeLink(i)}>
+          <button type="button" className={btn} disabled={busy || inCooldown || (liveMode && i.actions?.copyLink !== true)} onClick={() => void makeLink(i)}>
             {inCooldown ? `New link in ${wait(left)}` : "New access link"}
           </button>
         ) : (
-          <button type="button" className={btn} disabled={inCooldown} onClick={() => void resend(i)}>
+          <button type="button" className={btn} disabled={busy || inCooldown || (liveMode && i.actions?.resend !== true)} onClick={() => void resend(i)}>
             {inCooldown ? `${label} in ${wait(left)}` : label}
           </button>
         );
-        if (i.delivery.status !== "copied") menu.push(linkItem);
-        if (i.delivery.status === "failed") menu.push(edit);
-        menu.push(revokeItem);
+        if (i.delivery.status !== "copied" && (!liveMode || i.actions?.copyLink === true)) menu.push(linkItem);
+        if (i.delivery.status === "failed" && (!liveMode || i.actions?.edit === true)) menu.push(edit);
+        if (!liveMode || i.actions?.revoke === true) menu.push(revokeItem);
       }
     }
     return (
@@ -274,7 +297,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
     <div className="min-w-0">
       <StatusChip tone={DELIVERY_TONE[i.delivery.status]}>{DELIVERY_LABEL[i.delivery.status]}</StatusChip>
       <span className="mt-1 block truncate text-[12px] leading-snug text-(--ap-muted)" title={i.delivery.failureReason ?? undefined}>
-        {i.delivery.status === "copied" ? `Link created ${formatRelativePast(i.delivery.lastAttemptAt ?? "")}, shared by you` : i.delivery.lastAttemptAt ? `Sent ${formatRelativePast(i.delivery.lastAttemptAt)}, delivery: ${i.delivery.status}` : "Nothing sent yet"}
+        {i.delivery.status === "copied" ? `Link created ${formatRelativePast(i.delivery.lastAttemptAt ?? "")}, shared by you` : i.delivery.lastAttemptAt ? `Last attempt ${formatRelativePast(i.delivery.lastAttemptAt)}, delivery: ${i.delivery.status}` : "Nothing sent yet"}
         {i.delivery.failureReason ? `. ${i.delivery.failureReason}` : ""}
       </span>
     </div>

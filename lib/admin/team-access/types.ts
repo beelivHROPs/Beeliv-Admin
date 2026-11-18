@@ -87,6 +87,8 @@ export interface InvitationDelivery {
 }
 
 export interface Invitation {
+  sourceStatus?: "draft" | "pending" | "accepted" | "expired" | "revoked";
+  actions?: import("../../auth/invitation-management-wire").InvitationActions;
   id: string;
   /** Server invitation revision. Sent back as expectedRevision on every write (a live adapter MUST fill it; the mock may omit it). */
   revision?: number;
@@ -170,6 +172,7 @@ export interface InvitePrefill {
 /* ---------- facets, roles and capabilities ---------- */
 
 export interface TeamFacets {
+  scopeOptionsUnavailable?: boolean;
   roles: { id: string; name: string }[];
   /** Internal roles the signed-in person may invite (HR Manager: HR officers only; Operations: all). Absent = all. The server decides. */
   invitableRoleIds?: string[];

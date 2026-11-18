@@ -13,6 +13,8 @@
  *
  * Reused: SheetFrame (Offers), SelectMenu, Disc.
  */
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
+import { ExistingStaffInvite } from "./ExistingStaffInvite";
 import { playAdminSound } from "@/lib/admin/sound";
 import { useId, useState } from "react";
 import { NeedsConfirmation } from "@/components/admin/offers/parts";
@@ -35,18 +37,21 @@ const INTRO: Record<InvitationKind, string> = {
 export { Checkbox };
 
 export function InviteSheet({ kind, prefill, onClose, onDone }: { kind: InvitationKind; prefill?: InvitePrefill; onClose: () => void; onDone?: (inv: Invitation) => void }) {
-  const live = useTeamFacets().data;
+  const liveMode = teamAccessMode() === "live";
+  const choices = useTeamFacets();
+  const live = choices.data;
   // Keep the last loaded choices: inviteUser() makes the live data reload, and dropping to
   // undefined would unmount the wizard and lose its "sent" (invitation link) screen.
   const [kept, setKept] = useState<TeamFacets | undefined>(live ?? undefined);
   if (live && live !== kept) setKept(live);
   const facets = live ?? kept;
-  if (kind === "client" && !prefill?.clientId && facets) return <ClientWizard facets={facets} onClose={onClose} onDone={onDone} />;
+  if (!liveMode && kind === "client" && !prefill?.clientId && facets) return <ClientWizard facets={facets} onClose={onClose} onDone={onDone} />;
+  if (liveMode && kind === "staff") return <ExistingStaffInvite prefill={prefill} onClose={onClose} onDone={onDone} />;
   if (kind === "staff" && facets) return <StaffWizard facets={facets} prefill={prefill} onClose={onClose} onDone={onDone} />;
   return (
     <SheetFrame
       title={INVITE_TITLE[kind]}
-      description={INTRO[kind]}
+      description={liveMode && kind === "client" ? "Invite a contact to an existing client and its selected outlets. The person completes their own account setup." : INTRO[kind]}
       onClose={onClose}
       width={560}
       footer={
@@ -55,7 +60,7 @@ export function InviteSheet({ kind, prefill, onClose, onDone }: { kind: Invitati
         )
       }
     >
-      {facets ? <InviteForm key={kind} kind={kind} prefill={prefill} facets={facets} onClose={onClose} onDone={onDone} /> : <div role="status" aria-busy="true" aria-label="Loading" className="ap-shimmer mt-4 h-40 rounded-xl" />}
+      {choices.status === "error" || choices.status === "restricted" ? <div role="alert" className="mt-4"><p>We could not load the invitation choices.</p><button type="button" className="ap-btn ap-btn-s mt-3" onClick={choices.retry}>Try again</button></div> : facets ? <InviteForm key={kind} kind={kind} prefill={prefill} facets={facets} onClose={onClose} onDone={onDone} /> : <div role="status" aria-busy="true" aria-label="Loading" className="ap-shimmer mt-4 h-40 rounded-xl" />}
     </SheetFrame>
   );
 }
@@ -63,11 +68,12 @@ export function InviteSheet({ kind, prefill, onClose, onDone }: { kind: Invitati
 /** The form renders its own footer buttons inside the sheet body so state stays in one place. */
 function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: InvitationKind; prefill?: InvitePrefill; facets: TeamFacets; onClose: () => void; onDone?: (inv: Invitation) => void }) {
   const uid = useId();
+  const liveMode = teamAccessMode() === "live";
   const [name, setName] = useState(prefill?.name ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [roleId, setRoleId] = useState(prefill?.roleId ?? "");
   const [jobTitle, setJobTitle] = useState("");
-  const [levelId, setLevelId] = useState("");
+  const [levelId, setLevelId] = useState(liveMode ? "client" : "");
   const [clientId, setClientId] = useState(prefill?.clientId ?? "");
   const [outletIds, setOutletIds] = useState<string[]>(prefill?.outletIds ?? []);
   const [allClients, setAllClients] = useState(false);
@@ -82,21 +88,21 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
   const outlets = facets.outlets.filter((o) => o.clientId === clientId);
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-  const scopeOk = kind === "internal" ? allClients || scopeClients.length > 0 : kind === "client" ? !!clientId && outletIds.length > 0 : !!clientId;
-  const ready = !!name.trim() && emailOk && scopeOk && (kind === "internal" ? !!roleId : kind === "client" ? !!levelId : !!staffRole && !!startDate) && !busy;
+  const scopeOk = kind === "internal" ? (allClients && (!liveMode || roleId === "hr_manager")) || scopeClients.length > 0 : kind === "client" ? !!clientId && outletIds.length > 0 : !!clientId;
+  const ready = !!name.trim() && emailOk && scopeOk && (!liveMode || !facets.scopeOptionsUnavailable || (kind === "internal" && allClients && roleId === "hr_manager")) && (kind === "internal" ? !!roleId : kind === "client" ? !!levelId : !!staffRole && !!startDate) && !busy;
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
       const inv = await inviteUser({
-        kind, name, email, roleId: roleId || undefined, jobTitle: kind === "internal" ? jobTitle.trim() || undefined : undefined, accessLevelId: levelId || undefined, clientId: clientId || undefined, outletIds, allClients, scopeClientIds: scopeClients, personId: prefill?.personId, expiresInDays: Number(days), staffRole: staffRole || undefined, startDate: startDate || undefined,
+        kind, name, email, roleId: roleId || undefined, jobTitle: kind === "internal" ? jobTitle.trim() || undefined : undefined, accessLevelId: levelId || undefined, clientId: clientId || undefined, outletIds, allClients: allClients && (!liveMode || roleId === "hr_manager"), scopeClientIds: scopeClients, personId: prefill?.personId, expiresInDays: Number(days), staffRole: staffRole || undefined, startDate: startDate || undefined,
       });
       setSent(inv);
       playAdminSound("saved"); // invitation created (the confirmation screen is already showing)
       onDone?.(inv);
     } catch (e) {
-      setError(e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation. Resend or revoke the existing invitation instead." : "We could not record the invitation. Nothing was changed. Please try again.");
+      setError(e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation. Resend or revoke the existing invitation instead." : "We could not confirm the invitation. Check Invitations before trying again.");
     } finally {
       setBusy(false);
     }
@@ -119,7 +125,7 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
       {kind === "internal" ? (
         <>
           <span className={FIELD_LABEL}>Role</span>
-          <SelectMenu label="Role" value={roleId} placeholder="Choose a role" onChange={setRoleId} options={facets.roles.filter((r) => !facets.invitableRoleIds || facets.invitableRoleIds.includes(r.id)).map((r) => ({ value: r.id, label: r.name }))} className="mt-1.5" />
+          <SelectMenu label="Role" value={roleId} placeholder="Choose a role" onChange={(value) => { setRoleId(value); if (liveMode && value !== "hr_manager") setAllClients(false); }} options={facets.roles.filter((r) => !facets.invitableRoleIds || facets.invitableRoleIds.includes(r.id)).map((r) => ({ value: r.id, label: r.name }))} className="mt-1.5" />
           <label htmlFor={`${uid}-jt`} className={FIELD_LABEL}>
             Job title (optional)
           </label>
@@ -127,9 +133,10 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
           <p id={`${uid}-jt-h`} className="mt-1 text-[13px] text-(--ap-muted)">Shown on the team list only. It does not change what the person can do; the role above does.</p>
           <span className={FIELD_LABEL}>Client and outlet scope</span>
           <div className="mt-1.5 flex flex-col gap-2">
-            <Checkbox id={`${uid}-all`} checked={allClients} onChange={setAllClients}>
+            {!liveMode || roleId === "hr_manager" ? <Checkbox id={`${uid}-all`} checked={allClients} onChange={setAllClients}>
               All clients and outlets (Beeliv-wide)
-            </Checkbox>
+            </Checkbox> : null}
+            {facets.scopeOptionsUnavailable ? <p role="alert" className="text-sm text-(--ap-rose)">Client and outlet choices are unavailable. Close this sheet and try again before creating a scoped invitation.</p> : null}
             {!allClients
               ? facets.clients.map((c) => (
                   <Checkbox key={c.id} id={`${uid}-c-${c.id}`} checked={scopeClients.includes(c.id)} onChange={() => setScopeClients(toggle(scopeClients, c.id))}>
@@ -150,6 +157,7 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
               <SelectMenu label="Role" value={staffRole} placeholder="Choose a role" onChange={setStaffRole} options={facets.staffRoles} className="mt-1.5" />
             </>
           ) : null}
+          {facets.scopeOptionsUnavailable ? <p role="alert" className="mt-4 text-sm text-(--ap-rose)">Client and outlet choices are unavailable. Close this sheet and try again.</p> : null}
           <span className={FIELD_LABEL}>Client</span>
           <SelectMenu
             label="Client"
@@ -186,16 +194,16 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
               <span className={FIELD_LABEL}>Access level</span>
               <SelectMenu label="Access level" value={levelId} placeholder="Choose an access level" onChange={setLevelId} options={facets.accessLevels.map((l) => ({ value: l.id, label: l.name }))} className="mt-1.5" />
               <div className="mt-3">
-                <NeedsConfirmation>What each client access level may do.</NeedsConfirmation>
+                {liveMode ? <p className="text-[13px] text-(--ap-muted)">Client access is limited to the selected outlets.</p> : <NeedsConfirmation>What each client access level may do.</NeedsConfirmation>}
               </div>
             </>
           ) : null}
         </>
       )}
 
-      <span className={FIELD_LABEL}>Invitation expires after</span>
-      <SelectMenu label="Invitation expiry" value={days} onChange={setDays} options={facets.expiryOptions.map((o) => ({ value: String(o.days), label: o.label }))} className="mt-1.5" />
-      <p className="mt-3 text-[13px] text-(--ap-muted)">Email delivery is connected later. The invitation is recorded as pending, with resend and revoke.</p>
+      {!liveMode ? <><span className={FIELD_LABEL}>Invitation expires after</span>
+      <SelectMenu label="Invitation expiry" value={days} onChange={setDays} options={facets.expiryOptions.map((o) => ({ value: String(o.days), label: o.label }))} className="mt-1.5" /></> : <p className="mt-4 text-[13px] text-(--ap-muted)">Expiry is set automatically.</p>}
+      <p className="mt-3 text-[13px] text-(--ap-muted)">{liveMode ? "Create the invitation first, then choose email delivery or create an access link from Invitations." : "Email delivery is connected later. The invitation is recorded as pending, with resend and revoke."}</p>
 
       {error ? (
         <p role="alert" className="mt-3 text-[14px] font-semibold text-(--ap-rose)">
@@ -205,7 +213,7 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
       <div className="mt-6 flex flex-col-reverse gap-2.5 min-[768px]:flex-row min-[768px]:justify-end">
         <CancelButton onClick={onClose} disabled={busy} />
         <PrimaryButton disabled={!ready} onClick={submit}>
-          {busy ? "Working..." : "Record invitation"}
+          {busy ? "Working..." : liveMode ? "Create invitation" : "Record invitation"}
         </PrimaryButton>
       </div>
     </div>

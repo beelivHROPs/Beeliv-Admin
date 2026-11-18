@@ -25,13 +25,19 @@ export const listClientUsers: TeamAccessAdapter["listClientUsers"] = (q) => adap
 export const listAccounts: TeamAccessAdapter["listAccounts"] = (q) => adapter().listAccounts(q);
 export const listInvitations: TeamAccessAdapter["listInvitations"] = (q) => adapter().listInvitations(q);
 export const inviteUser: TeamAccessAdapter["invite"] = (i) => adapter().invite(i);
-export const sendInvitation: TeamAccessAdapter["sendInvitation"] = (id) => adapter().sendInvitation(id);
+export const sendInvitation: TeamAccessAdapter["sendInvitation"] = (id, rev) => adapter().sendInvitation(id, rev);
 export const createAccessLink: TeamAccessAdapter["createAccessLink"] = (id, rev) => adapter().createAccessLink(id, rev);
-export const updateInvitationEmail: TeamAccessAdapter["updateInvitationEmail"] = (id, e) => adapter().updateInvitationEmail(id, e);
-export const replaceInvitation: TeamAccessAdapter["replaceInvitation"] = (id) => adapter().replaceInvitation(id);
+export const updateInvitationEmail: TeamAccessAdapter["updateInvitationEmail"] = (id, e, rev) => adapter().updateInvitationEmail(id, e, rev);
+export const replaceInvitation: TeamAccessAdapter["replaceInvitation"] = (id, rev) => adapter().replaceInvitation(id, rev);
 export const findDuplicates: TeamAccessAdapter["findDuplicates"] = (i) => adapter().findDuplicates(i);
-export const resendInvitation: TeamAccessAdapter["resendInvitation"] = (id) => adapter().resendInvitation(id);
-export const revokeInvitation: TeamAccessAdapter["revokeInvitation"] = (id, r) => adapter().revokeInvitation(id, r);
+export const resendInvitation: TeamAccessAdapter["resendInvitation"] = (id, rev) => adapter().resendInvitation(id, rev);
+export const revokeInvitation: TeamAccessAdapter["revokeInvitation"] = (id, r, rev) => adapter().revokeInvitation(id, r, rev);
 export const setAccountState: TeamAccessAdapter["setState"] = (id, a, r) => adapter().setState(id, a, r);
 export const updateAccess: TeamAccessAdapter["updateAccess"] = (id, p) => adapter().updateAccess(id, p);
 export const getHistory: TeamAccessAdapter["getHistory"] = (id) => adapter().getHistory(id);
+
+export const getInvitationDetails = (id: string, expectedRevision?: number) => {
+  const selected = adapter();
+  if (!selected.getInvitation) return Promise.reject(new Error("Not available"));
+  return selected.getInvitation(id, expectedRevision);
+};
