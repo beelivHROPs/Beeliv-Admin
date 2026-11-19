@@ -10,6 +10,23 @@ export function webhookConfig() {
   if (!/^whsec_[A-Za-z0-9+/]+={0,2}$/.test(secret) || Buffer.from(secret.slice(6),"base64").length<16) throw new Error("mail_unconfigured");
   return secret;
 }
+/**
+ * Producer (Vercel Admin: invite-send/resend). Needs the mail gate, the sender settings (to render the immutable message
+ * snapshot) and the encryption keys, but NOT the Resend key or worker secret: since 2026-11-18 sending happens in the
+ * Supabase Edge Function send-auth-mail (supabase/functions), which holds those secrets.
+ */
+export function producerConfig() {
+  mailGate();
+  const origins=Object.fromEntries((["talent","client","admin"] as AuthApp[]).map(app=>[app,required("AUTH_ORIGIN_"+app.toUpperCase())])) as Record<AuthApp,string>;
+  const settings: MailSettings={senderName:required("AUTH_MAIL_SENDER_NAME"),senderAddress:required("AUTH_MAIL_SENDER_ADDRESS"),replyTo:required("AUTH_MAIL_REPLY_TO"),supportEmail:required("AUTH_MAIL_SUPPORT_EMAIL"),logoWhiteUrl:required("AUTH_MAIL_LOGO_WHITE_URL"),origins};
+  validateSettings(settings);
+  return {settings,keys:encryptionKeys()};
+}
+function encryptionKeys() {
+  const raw: unknown=JSON.parse(required("AUTH_MAIL_ENCRYPTION_KEYS"));
+  if (!raw || typeof raw!=="object" || Array.isArray(raw) || Object.entries(raw).length===0 || Object.entries(raw).some(([name,key])=> !/^[A-Za-z0-9_-]{1,40}$/.test(name) || typeof key!=="string" || !/^[A-Za-z0-9+/]{43}=$/.test(key) || Buffer.from(key,"base64").length!==32 || Buffer.from(key,"base64").toString("base64")!==key)) throw new Error("mail_unconfigured");
+  return raw as Record<string,string>;
+}
 export function workerConfig() {
   mailGate();
   const apiKey=required("RESEND_API_KEY"); const workerSecret=required("AUTH_MAIL_WORKER_SECRET");

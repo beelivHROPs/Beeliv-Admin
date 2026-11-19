@@ -7,7 +7,7 @@ import { AuthFailure } from "./service";
 import { limitAuth, rateBucketsV2Enabled, rejectRpcRateLimit } from "./rate";
 import { parseManagedInvitation, parseInvitationList, INVITATION_LIST_STATUSES, LIST_TIMESTAMP, type InvitationDraftInput, type InvitationListInput } from "@/lib/auth/invitation-management-wire";
 import { sealPayload } from "./mail/crypto";
-import { workerConfig } from "./mail/config";
+import { producerConfig } from "./mail/config";
 import { renderInvitation } from "./mail/render";
 import { record, uuid, type Template } from "./mail/model";
 import { retrieveResendStatus } from "./mail/provider";
@@ -80,7 +80,7 @@ export async function manageInvitation(action:ManagementAction,input:Record<stri
   const rawTemplate=record(prepare.template);const invite=record(prepare.invitation);
   if(!rawTemplate||!invite||typeof invite.email!=="string"||typeof prepare.app!=="string"||!["admin","client","talent"].includes(prepare.app)||typeof prepare.tokenRevision!=="number"||!Number.isSafeInteger(prepare.tokenRevision)||!["id","kind","revision","subject","html","text"].every(k=>typeof rawTemplate[k]==="string"))throw new AuthFailure("unavailable",503);
   const template={id:String(rawTemplate.id),kind:rawTemplate.kind as Template["kind"],revision:String(rawTemplate.revision),subject:String(rawTemplate.subject),html:String(rawTemplate.html),text:String(rawTemplate.text)};
-  const config=workerConfig();const keyVersion=process.env.AUTH_MAIL_ACTIVE_KEY_VERSION;
+  const config=producerConfig();const keyVersion=process.env.AUTH_MAIL_ACTIVE_KEY_VERSION;
   if(!keyVersion||!Object.hasOwn(config.keys,keyVersion))throw new AuthFailure("unavailable",503);
   const token=randomBytes(32).toString("base64url");const id=randomUUID();
   const metadata={id,invitationId:String(invite.id),tokenRevision:prepare.tokenRevision+1,templateId:template.id,keyVersion};
@@ -124,7 +124,7 @@ function clean(value:unknown){
  const parsed=parseManagedInvitation(value);if(!parsed.ok)throw new AuthFailure("outcome_unknown",503);
  // Disabled/unconfigured delivery must not appear actionable merely because a template exists.
  if(parsed.invitation.actions.send||parsed.invitation.actions.resend){
-  try{const config=workerConfig();const version=process.env.AUTH_MAIL_ACTIVE_KEY_VERSION;if(!version||!Object.hasOwn(config.keys,version))throw new Error();}
+  try{const config=producerConfig();const version=process.env.AUTH_MAIL_ACTIVE_KEY_VERSION;if(!version||!Object.hasOwn(config.keys,version))throw new Error();}
   catch{parsed.invitation.actions.send=false;parsed.invitation.actions.resend=false;}
  }
  return parsed;
