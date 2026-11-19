@@ -52,7 +52,7 @@ import { PilotNotice } from "@/components/shared/PilotNotice";
 import { usePilotMenu } from "@/lib/pilot/context";
 import { pilotFilter, pilotFilterGroups } from "@/lib/pilot/menu";
 import { Restricted } from "./ops/parts";
-import { IDENTITY_OPTIONS, hasLiveAdminIdentity, opsSessionFrom, setAdminIdentity, useAdminIdentity, useAdminRole, type AdminIdentityId } from "@/lib/admin/ops/identity";
+import { IDENTITY_OPTIONS, useLiveAdminProfile, opsSessionFrom, setAdminIdentity, useAdminIdentity, useAdminRole, type AdminIdentityId } from "@/lib/admin/ops/identity";
 import "./ops/ops-identity.css";
 import { InterviewSoonSound } from "./InterviewSoonSound";
 import { ApprovalWaitingSound } from "./ops/ApprovalWaitingSound";
@@ -103,9 +103,15 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   // Live: the signed-in person's real role is known (seeded from the server session) but the sample session's
   // fictional name must never show. Use the role label until the real name is wired in.
   const identityNow = useAdminIdentity();
-  const liveId = hasLiveAdminIdentity() ? identityNow : null;
-  const session = liveId && protoSession
-    ? { ...protoSession, user: { firstName: liveId === "ops" ? "Operations" : liveId === "hr-manager" ? "HR Manager" : "HR", lastName: "", avatarUrl: null } }
+  const authLive = useAuthLive();
+  const liveId = authLive ? identityNow : null;
+  const ownProfile = useLiveAdminProfile();
+  const liveName = authLive ? (ownProfile?.fullName ?? "").trim() : "";
+  const [liveFirst, ...liveRest] = liveName.split(/\s+/);
+  const session: AdminSession | null = authLive
+    ? { id: "", role: liveId === "ops" ? "ops" : "hr", hrLevel: (liveId === "ops" ? "Head of Operations" : liveId === "hr-manager" ? "HR Manager" : "HR Officer") as AdminSession["hrLevel"], reference: "",
+        user: { firstName: liveFirst || "Your account", lastName: liveRest.join(" "), avatarUrl: null },
+        capabilities: { canCreateVacancy: false, canSubmitForApproval: false, canApproveSelection: false }, scope: { clients: [], outlets: [] } }
     : protoSession;
   // Role-specific menu and route guard (prototype of the server rules, lib/admin/role-access.ts).
   const access = useAccessRole();
@@ -119,8 +125,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   // Notifications and menu badges still come from sample data: blank on a live deployment (no fake counts or chimes).
   const sampleNotes = useNotifications().data;
   const sampleCounts = useNavCounts().data;
-  const notes = useMemo(() => (liveId ? [] : sampleNotes), [liveId, sampleNotes]);
-  const navCounts = liveId ? undefined : sampleCounts;
+  const notes = useMemo(() => (authLive ? [] : sampleNotes), [authLive, sampleNotes]);
+  const navCounts = authLive ? undefined : sampleCounts;
   const collapsed = useSidebarCollapsed();
   const unread = (notes ?? []).filter((n) => !n.read).length;
   // Soft chimes when something new arrives (never on first load).

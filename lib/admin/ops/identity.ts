@@ -56,9 +56,17 @@ function load() {
  * session, Proxy and RLS checks remain the access boundary.
  */
 let liveIdentity: AdminIdentityId | null = null;
-export function seedLiveAdminIdentity(next: AdminIdentityId) {
+/** The signed-in person's own name, email and phone (server-verified, display only). Never a sample person. */
+export type LiveAdminProfile = { fullName: string; email: string; phone: string };
+let liveProfile: LiveAdminProfile | null = null;
+export function seedLiveAdminIdentity(next: AdminIdentityId, profile: LiveAdminProfile | null = null) {
   if (typeof window === "undefined") return;
   liveIdentity = next;
+  liveProfile = profile; // A failed/new account load must clear the previous person.
+}
+export const getLiveAdminProfile = (): LiveAdminProfile | null => liveProfile;
+export function useLiveAdminProfile(): LiveAdminProfile | null {
+  return useSyncExternalStore(subscribeAdminIdentity, getLiveAdminProfile, () => null);
 }
 export const hasLiveAdminIdentity = (): boolean => liveIdentity !== null;
 

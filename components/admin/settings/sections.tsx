@@ -68,7 +68,7 @@ function profileErrors(d: { fullName: string; jobTitle: string; phone: string })
   };
 }
 
-export function ProfileSection({ profile, onSaved }: { profile: AdminProfile; onSaved: (p: { fullName: string; jobTitle: string; phone: string }) => void }) {
+export function ProfileSection({ profile, onSaved, readOnly = false }: { profile: AdminProfile; readOnly?: boolean; onSaved: (p: { fullName: string; jobTitle: string; phone: string }) => void }) {
   const [draft, setDraft] = useState({ fullName: profile.fullName, jobTitle: profile.jobTitle, phone: profile.phone });
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,6 +80,7 @@ export function ProfileSection({ profile, onSaved }: { profile: AdminProfile; on
   const scopeText = profile.scope.clients.length ? `${profile.scope.clients.length} ${profile.scope.clients.length === 1 ? "client" : "clients"}, ${profile.scope.outlets.length} ${profile.scope.outlets.length === 1 ? "outlet" : "outlets"}. See Access & organisation.` : "None assigned yet. See Access & organisation.";
 
   async function save() {
+    if (readOnly) return;
     if (Object.values(profileErrors(draft)).some(Boolean) || ref.current?.querySelector('[aria-invalid="true"]')) {
       setTried(true);
       flag();
@@ -118,19 +119,26 @@ export function ProfileSection({ profile, onSaved }: { profile: AdminProfile; on
       >
         <FormGrid>
           <Field label="Full name" htmlFor="set-name" error={err.fullName}>
-            <input id="set-name" className={INPUT_CLS} autoComplete="name" value={draft.fullName} onChange={(e) => set("fullName", e.target.value)} aria-invalid={err.fullName ? true : undefined} aria-describedby={err.fullName ? "set-name-err" : undefined} />
+            <input id="set-name" className={INPUT_CLS} readOnly={readOnly} autoComplete="name" value={draft.fullName} onChange={(e) => set("fullName", e.target.value)} aria-invalid={err.fullName ? true : undefined} aria-describedby={err.fullName ? "set-name-err" : undefined} />
           </Field>
           <Field label="Job title" htmlFor="set-title" error={err.jobTitle}>
-            <input id="set-title" className={INPUT_CLS} autoComplete="organization-title" placeholder="e.g. HR Officer" value={draft.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} aria-invalid={err.jobTitle ? true : undefined} aria-describedby={err.jobTitle ? "set-title-err" : undefined} />
+            <input id="set-title" className={INPUT_CLS} readOnly={readOnly} autoComplete="organization-title" placeholder="e.g. HR Officer" value={draft.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} aria-invalid={err.jobTitle ? true : undefined} aria-describedby={err.jobTitle ? "set-title-err" : undefined} />
           </Field>
           <Field label="Phone number" htmlFor="set-phone" error={err.phone}>
-            <PhoneInput quiet id="set-phone" value={draft.phone} onChange={(v) => set("phone", v)} invalid={Boolean(err.phone)} />
+            {readOnly ? (
+              <input id="set-phone" className={INPUT_CLS} readOnly value={draft.phone || "Not added"} />
+            ) : (
+              <PhoneInput quiet id="set-phone" value={draft.phone} onChange={(v) => set("phone", v)} invalid={Boolean(err.phone)} />
+            )}
           </Field>
           <Field label="Email" htmlFor="set-email" hint="Managed by your Beeliv sign-in.">
             <input id="set-email" className={INPUT_CLS} readOnly value={profile.email ?? "Not available yet"} />
           </Field>
         </FormGrid>
-        <div className="mt-5 flex justify-end gap-2.5 max-[640px]:flex-col-reverse max-[640px]:[&>button]:w-full">
+        {readOnly ? (
+          <p className="ap-sm mt-4">Your name, phone and email come from your Beeliv account setup.</p>
+        ) : null}
+        <div className={`mt-5 flex justify-end gap-2.5 max-[640px]:flex-col-reverse max-[640px]:[&>button]:w-full ${readOnly ? "hidden" : ""}`}>
           {dirty ? (
             <button
               type="button"

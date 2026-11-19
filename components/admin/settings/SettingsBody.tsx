@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuthLive } from "@/lib/ui/auth-live";
+import { LiveSettingsBody } from "./LiveSettingsBody";
 import { usePortalSignOut } from "@/lib/ui/use-portal-sign-out";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Eye, FileText, Image, LockKeyhole, LogOut, MapPin, Bell, Settings, UserRound, type LucideIcon } from "@/components/applicant/icons";
@@ -8,6 +10,7 @@ import { PageHeading } from "@/components/applicant/primitives";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { scrollToSection } from "@/lib/applicant/settings";
 import { useAdminAccount } from "@/lib/admin/settings/hooks";
+import { getLiveAdminProfile, hasLiveAdminIdentity } from "@/lib/admin/ops/identity";
 import type { AdminAccountSettings } from "@/lib/admin/settings/types";
 import { canSeeSettingsSection, useAccessRole } from "@/lib/admin/role-access";
 import { AccessSection, AppearanceSection, BrandingSection, NotificationsSection, PrivacySection, ProfileSection, SecuritySection, WorkspaceSection } from "./sections";
@@ -31,6 +34,10 @@ const ALL_SECTIONS: [string, string, LucideIcon][] = [
 ];
 
 export function SettingsBody() {
+  return useAuthLive() ? <LiveSettingsBody /> : <SampleSettingsBody />;
+}
+
+function SampleSettingsBody() {
   const role = useAccessRole() ?? "hr_officer";
   // The officer sees personal settings only: Branding and Access & organisation are manager / Operations (proposal, needs Beeliv confirmation).
   const SECTIONS = useMemo(() => ALL_SECTIONS.filter(([id]) => canSeeSettingsSection(role, id)), [role]);
@@ -73,7 +80,14 @@ export function SettingsBody() {
       </div>
     );
   }
-  const d: AdminAccountSettings = { ...live.data, ...edits };
+  const merged: AdminAccountSettings = { ...live.data, ...edits };
+  // Live: the profile is the SIGNED-IN person (server-verified), never the sample person. Read-only until a live
+  // profile-update endpoint exists.
+  const me = hasLiveAdminIdentity() ? getLiveAdminProfile() : null;
+  const liveMode = hasLiveAdminIdentity();
+  const d: AdminAccountSettings = liveMode
+    ? { ...merged, profile: { ...merged.profile, fullName: me?.fullName ?? "", phone: me?.phone ?? "", email: me?.email || null, jobTitle: merged.profile.roleLabel, employeeId: null, avatarUrl: null } }
+    : merged;
 
   const jump = (id: string) => {
     setActive(id);
@@ -150,7 +164,7 @@ export function SettingsBody() {
           <div className={openId ? "flex min-w-0 flex-col gap-5" : "flex min-w-0 flex-col gap-5 max-[767px]:hidden"}>
           <SettingsGroup heading="Account" openId={openId} ids={PHONE_GROUPS[0][1]}>
             <Only id="s-profile" open={openId}>
-              <ProfileSection profile={d.profile} onSaved={(p) => setEdits((e) => ({ ...e, profile: { ...d.profile, ...p } }))} />
+              <ProfileSection readOnly={liveMode} profile={d.profile} onSaved={(p) => setEdits((e) => ({ ...e, profile: { ...d.profile, ...p } }))} />
             </Only>
             <Only id="s-security" open={openId}>
               <SecuritySection

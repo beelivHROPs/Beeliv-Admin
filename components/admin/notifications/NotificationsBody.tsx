@@ -12,6 +12,7 @@ import { NotificationList } from "@/components/shared/notifications/Notification
 import { NotificationError, NotificationSkeleton } from "@/components/shared/notifications/NotificationStates";
 import { useNotifications } from "@/lib/admin/hooks";
 import { fromAdmin } from "@/lib/notifications/adapters";
+import { hasLiveAdminIdentity } from "@/lib/admin/ops/identity";
 
 export function NotificationsBody() {
   const { data, status, retry } = useNotifications();
@@ -20,7 +21,7 @@ export function NotificationsBody() {
 
   const items = useMemo(
     () =>
-      (data ?? []).map((n) => {
+      (hasLiveAdminIdentity() ? [] : (data ?? [])).map((n) => {  // live: no sample notifications until real ones exist
         const s = fromAdmin(n);
         return s.readAt || !(allRead || seen.has(n.id)) ? s : { ...s, readAt: s.createdAt };
       }),
@@ -29,7 +30,7 @@ export function NotificationsBody() {
 
   return (
     <div>
-      <div className="mx-auto w-full max-w-[720px]">
+      <div className="w-full">
         <PageHeading title="Notifications" />
       </div>
       {status === "loading" ? (
@@ -42,6 +43,8 @@ export function NotificationsBody() {
         </div>
       ) : (
         <NotificationList
+          wide
+          tiles
           items={items}
           emptyText="New notifications will appear here as things happen."
           onOpen={(n) => setSeen((s) => new Set(s).add(n.id))}
