@@ -62,9 +62,12 @@ let liveProfile: LiveAdminProfile | null = null;
 export function seedLiveAdminIdentity(next: AdminIdentityId, profile: LiveAdminProfile | null = null) {
   if (typeof window === "undefined") return;
   liveIdentity = next;
-  if (profile) liveProfile = profile;
+  liveProfile = profile; // A failed/new account load must clear the previous person.
 }
 export const getLiveAdminProfile = (): LiveAdminProfile | null => liveProfile;
+export function useLiveAdminProfile(): LiveAdminProfile | null {
+  return useSyncExternalStore(subscribeAdminIdentity, getLiveAdminProfile, () => null);
+}
 export const hasLiveAdminIdentity = (): boolean => liveIdentity !== null;
 
 export function getAdminIdentity(): AdminIdentityId {

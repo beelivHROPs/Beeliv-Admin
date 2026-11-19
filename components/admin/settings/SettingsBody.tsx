@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuthLive } from "@/lib/ui/auth-live";
+import { LiveSettingsBody } from "./LiveSettingsBody";
 import { usePortalSignOut } from "@/lib/ui/use-portal-sign-out";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Eye, FileText, Image, LockKeyhole, LogOut, MapPin, Bell, Settings, UserRound, type LucideIcon } from "@/components/applicant/icons";
@@ -32,6 +34,10 @@ const ALL_SECTIONS: [string, string, LucideIcon][] = [
 ];
 
 export function SettingsBody() {
+  return useAuthLive() ? <LiveSettingsBody /> : <SampleSettingsBody />;
+}
+
+function SampleSettingsBody() {
   const role = useAccessRole() ?? "hr_officer";
   // The officer sees personal settings only: Branding and Access & organisation are manager / Operations (proposal, needs Beeliv confirmation).
   const SECTIONS = useMemo(() => ALL_SECTIONS.filter(([id]) => canSeeSettingsSection(role, id)), [role]);

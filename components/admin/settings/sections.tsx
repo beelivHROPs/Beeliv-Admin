@@ -80,6 +80,7 @@ export function ProfileSection({ profile, onSaved, readOnly = false }: { profile
   const scopeText = profile.scope.clients.length ? `${profile.scope.clients.length} ${profile.scope.clients.length === 1 ? "client" : "clients"}, ${profile.scope.outlets.length} ${profile.scope.outlets.length === 1 ? "outlet" : "outlets"}. See Access & organisation.` : "None assigned yet. See Access & organisation.";
 
   async function save() {
+    if (readOnly) return;
     if (Object.values(profileErrors(draft)).some(Boolean) || ref.current?.querySelector('[aria-invalid="true"]')) {
       setTried(true);
       flag();
