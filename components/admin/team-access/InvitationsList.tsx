@@ -25,8 +25,9 @@ import { Mail, Search, X } from "@/components/applicant/icons";
 import { EmptyState } from "@/components/applicant/primitives";
 import { StatusChip } from "@/components/client/StatusChip";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
-import { formatDate, formatRelativePast } from "@/lib/applicant/time";
+import { invitationCreator, invitationTiming, invitationDeliveryNote } from "@/lib/admin/team-access/invitation-presentation";
 import { AccessLinkSheet } from "./AccessLinkSheet";
+import { InvitationDetailsSheet } from "./InvitationDetailsSheet";
 import { getInvitationDetails, createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
 import type { AccessLink, Invitation, InvitationKind, InvitationStatus, TeamCapabilities } from "@/lib/admin/team-access/types";
 import { DELIVERY_LABEL, DELIVERY_TONE, INVITE_LABEL, INVITE_ORDER, INVITE_TONE, KIND_LABEL, TEAM_HREF } from "./meta";
@@ -59,6 +60,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
   const { limit, more } = useBatch(`${search}|${status}|${kind}`);
   const [revoking, setRevoking] = useState<Invitation | null>(null);
   const [editing, setEditing] = useState<Invitation | null>(null);
+  const [details, setDetails] = useState<Invitation | null>(null);
   const [shownLink, setShownLink] = useState<{ name: string; link: AccessLink } | null>(null);
   const [busy, setBusy] = useState(false);
   const [unknownLinks, setUnknownLinks] = useState<string[]>([]);
@@ -286,18 +288,19 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       }
     }
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" className={btn} disabled={busy} onClick={() => setDetails(i)}>View details</button>
         {primary}
         {menu.length ? <RowMenu label={`More actions for the invitation to ${i.name}`} items={menu} /> : null}
       </div>
     );
   };
-  const dates = (i: Invitation) => (i.status === "pending" ? `Expires ${formatDate(i.expiresAt)}` : i.status === "expired" ? `Expired ${formatDate(i.expiresAt)}` : `Created ${formatDate(i.invitedAt)}`);
+  const dates = invitationTiming;
   const deliveryCell = (i: Invitation) => (
     <div className="min-w-0">
       <StatusChip tone={DELIVERY_TONE[i.delivery.status]}>{DELIVERY_LABEL[i.delivery.status]}</StatusChip>
       <span className="mt-1 block truncate text-[12px] leading-snug text-(--ap-muted)" title={i.delivery.failureReason ?? undefined}>
-        {i.delivery.status === "copied" ? `Link created ${formatRelativePast(i.delivery.lastAttemptAt ?? "")}, shared by you` : i.delivery.lastAttemptAt ? `Last attempt ${formatRelativePast(i.delivery.lastAttemptAt)}, delivery: ${i.delivery.status}` : "Nothing sent yet"}
+        {invitationDeliveryNote(i)}
         {i.delivery.failureReason ? `. ${i.delivery.failureReason}` : ""}
       </span>
     </div>
@@ -355,6 +358,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
                   <div role="cell" className="min-w-0">
                     <StatusChip tone={INVITE_TONE[i.status]}>{INVITE_LABEL[i.status]}</StatusChip>
                     <span className="mt-1 block truncate text-[12px] text-(--ap-muted)">{dates(i)}{i.resendCount ? `, resent ${i.resendCount}x` : ""}</span>
+                    <span className="mt-1 block text-[12px] text-(--ap-muted)">{invitationCreator(i)}</span>
                   </div>
                   <div role="cell" className="min-w-0">{deliveryCell(i)}</div>
                   <div role="cell">{actionsFor(i)}</div>
@@ -372,6 +376,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <StatusChip tone={INVITE_TONE[i.status]}>{INVITE_LABEL[i.status]}</StatusChip>
                     <span className="text-[12px] text-(--ap-muted)">{dates(i)}</span>
+                    <span className="text-[12px] text-(--ap-muted)">{invitationCreator(i)}</span>
                   </div>
                   <div className="mt-2">{deliveryCell(i)}</div>
                   <div className="mt-2.5">{actionsFor(i)}</div>
@@ -382,9 +387,10 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
         )}
       </div>
       <ShowMore shown={limit} total={page.total} onMore={more} onClear={narrowed ? clear : null} />
-      <p className="mt-3 text-[13px] text-(--ap-muted)">Invitations are never sent automatically. Email delivery is connected later, so sending is recorded only.</p>
+      <p className="mt-3 text-[13px] text-(--ap-muted)">{liveMode ? "Create an invitation, then choose email delivery or an access link. Queued email is not confirmation of delivery." : "Invitations are never sent automatically. Email delivery is connected later, so sending is recorded only."}</p>
       </ListCard>
 
+      {details ? <InvitationDetailsSheet key={`${details.id}:${details.revision}`} invitation={details} onClose={() => setDetails(null)} /> : null}
       {shownLink ? <AccessLinkSheet name={shownLink.name} link={shownLink.link} onClose={() => setShownLink(null)} /> : null}
       {editing ? <EmailSheet inv={editing} busy={busy} error={err} onCancel={() => setEditing(null)} onSubmit={saveEmail} /> : null}
       {revoking ? (
