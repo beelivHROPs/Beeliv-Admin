@@ -79,17 +79,20 @@ export function StaffDirectory() {
   const narrowing = !!(query.search || query.clientId || query.outletId || query.department || query.role || query.status);
 
   return (
+    <>
+      {/* Keep invitation state mounted when the first saved staff record changes the empty view. */}
+      <PageHeading title="Staff Directory" right={<span className="flex flex-wrap items-center gap-2.5"><AddStaffButton /><InviteButton kind="staff" /></span>} />
     <AdminState status={page ? "ready" : live.status} title="Staff Directory" what="the staff directory" retry={live.retry}>
       {!page ? null : page.workspaceEmpty ? (
         <>
-          <PageHeading title="Staff Directory" right={<span className="flex flex-wrap items-center gap-2.5"><AddStaffButton /><InviteButton kind="staff" autoOpen={false} /></span>} />
+
           <div className="ap-card rounded-[20px] p-6 min-[768px]:p-8">
             <EmptyState icon={IdCard} title="No staff in your clients yet" description="People appear here once they are assigned to one of your clients or outlets." />
           </div>
         </>
       ) : (
         <div>
-          <PageHeading title="Staff Directory" right={<span className="flex flex-wrap items-center gap-2.5"><AddStaffButton /><InviteButton kind="staff" autoOpen={false} /></span>} />
+
           <section aria-label="Staff" data-search-scope className="ap-card min-w-0 rounded-[20px] p-4.5 max-[767px]:rounded-none max-[767px]:border-0 max-[767px]:bg-transparent max-[767px]:p-0 max-[767px]:shadow-none min-[768px]:rounded-none min-[768px]:border-0 min-[768px]:bg-transparent min-[768px]:p-0 min-[768px]:shadow-none">
             <div className="contents max-[767px]:mb-4 max-[767px]:block">
             <SearchBar
@@ -158,6 +161,7 @@ export function StaffDirectory() {
         </div>
       )}
     </AdminState>
+    </>
   );
 }
 
