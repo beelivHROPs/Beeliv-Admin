@@ -14,7 +14,7 @@
  * Reused: SheetFrame (Offers), SelectMenu, Disc.
  */
 import { teamAccessMode } from "@/lib/admin/team-access/mode";
-import { ExistingStaffInvite } from "./ExistingStaffInvite";
+import { LiveStaffInvite } from "./LiveStaffInvite";
 import { playAdminSound } from "@/lib/admin/sound";
 import { useId, useState } from "react";
 import { NeedsConfirmation } from "@/components/admin/offers/parts";
@@ -36,7 +36,13 @@ const INTRO: Record<InvitationKind, string> = {
 
 export { Checkbox };
 
-export function InviteSheet({ kind, prefill, onClose, onDone }: { kind: InvitationKind; prefill?: InvitePrefill; onClose: () => void; onDone?: (inv: Invitation) => void }) {
+type InviteSheetProps = { kind: InvitationKind; prefill?: InvitePrefill; onClose: () => void; onDone?: (inv: Invitation) => void };
+export function InviteSheet(props: InviteSheetProps) {
+  if (teamAccessMode() === "live" && props.kind === "staff") return <LiveStaffInvite {...props} />;
+  return <InviteChoices {...props} />;
+}
+
+function InviteChoices({ kind, prefill, onClose, onDone }: InviteSheetProps) {
   const liveMode = teamAccessMode() === "live";
   const choices = useTeamFacets();
   const live = choices.data;
@@ -46,7 +52,6 @@ export function InviteSheet({ kind, prefill, onClose, onDone }: { kind: Invitati
   if (live && live !== kept) setKept(live);
   const facets = live ?? kept;
   if (!liveMode && kind === "client" && !prefill?.clientId && facets) return <ClientWizard facets={facets} onClose={onClose} onDone={onDone} />;
-  if (liveMode && kind === "staff") return <ExistingStaffInvite prefill={prefill} onClose={onClose} onDone={onDone} />;
   if (kind === "staff" && facets) return <StaffWizard facets={facets} prefill={prefill} onClose={onClose} onDone={onDone} />;
   return (
     <SheetFrame

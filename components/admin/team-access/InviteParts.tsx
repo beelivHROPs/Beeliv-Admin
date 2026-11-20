@@ -2,12 +2,14 @@
 
 /** Shared pieces of the invite sheets: a checkbox row and the result panel that shows the invitation link. */
 import { teamAccessMode } from "@/lib/admin/team-access/mode";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { PrimaryButton } from "@/components/admin/offers/Sheet";
 import { Disc } from "@/components/admin/overview/Disc";
 import { Check, Exclaim } from "@/components/applicant/icons";
-import { sendInvitation } from "@/lib/admin/team-access/hooks";
-import type { Invitation } from "@/lib/admin/team-access/types";
+import { createAccessLink, sendInvitation } from "@/lib/admin/team-access/hooks";
+import type { AccessLink, Invitation } from "@/lib/admin/team-access/types";
+
+import { AccessLinkSheet } from "./AccessLinkSheet";
 
 export function Checkbox({ id, checked, onChange, children }: { id: string; checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
   return (
@@ -21,17 +23,20 @@ export function Checkbox({ id, checked, onChange, children }: { id: string; chec
 /**
  * After a record and its invitation are created: the invitation is NOT sent
  * automatically. Sending is an explicit action ("Send invitation"). No link is
- * shown or put in a mailto: here: the raw link appears once, only in
- * AccessLinkSheet ("Create access link" in Invitations). The system itself
- * emails nothing in the demo ("Email delivery is connected later").
+ * put in a mailto: the raw link appears once after an explicit Create access link.
+ * The embedded link view shares the parent dialog and keeps the token in memory only.
  */
 export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onClose: () => void }) {
   const liveMode = teamAccessMode() === "live";
   const [inv, setInv] = useState(first);
+  const [link, setLink] = useState<AccessLink | null>(null);
+  const working = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sent = liveMode ? inv.delivery.status === "queued" || inv.delivery.status === "sent" || inv.delivery.status === "copied" : inv.delivery.status !== "not-sent";
   async function send() {
+    if (working.current) return;
+    working.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -39,9 +44,20 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
     } catch {
       setError("We could not confirm sending. Check Invitations before trying again.");
     } finally {
+      working.current = false;
       setBusy(false);
     }
   }
+  async function makeLink() {
+    if (working.current || !liveMode || inv.actions?.copyLink !== true) return;
+    working.current = true; setBusy(true); setError(null);
+    try {
+      setLink(await createAccessLink(inv.id, inv.revision));
+    } catch {
+      setError("We could not confirm creating the link. Open Invitations to check this invitation before trying again.");
+    } finally { working.current = false; setBusy(false); }
+  }
+  if (link) return <AccessLinkSheet name={inv.name} link={link} onClose={onClose} embedded />;
   return (
     <div>
       <div className={`mt-4 flex items-start gap-3 rounded-xl p-3.5 ${sent ? "bg-(--ap-ok-bg)" : "bg-(--ap-warn-bg)"}`}>
@@ -53,7 +69,7 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
             </>
           ) : (
             <>
-              <b>Record created. The invitation has not been sent.</b> Choose Send invitation, or create an access link from Invitations. Nothing is sent automatically.
+              <b>Record created. The invitation has not been sent.</b> Choose Send invitation or Create access link below. Nothing is sent automatically.
             </>
           )}
         </p>
@@ -64,6 +80,7 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
             {busy ? "Working..." : "Send invitation"}
           </button>
         ) : null}
+        {liveMode && !sent && inv.actions?.copyLink === true ? <button type="button" disabled={busy} onClick={() => void makeLink()} className="ap-btn ap-btn-s h-12 min-[560px]:h-11">{busy ? "Working..." : "Create access link"}</button> : null}
       </div>
       {error ? (
         <p role="alert" className="mt-3 text-[14px] font-semibold text-(--ap-rose)">
@@ -71,11 +88,11 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
         </p>
       ) : (
         <p className="mt-2 text-[13px] text-(--ap-muted)" role="status">
-          The access link is shown once, only when you create it from Invitations.
+          An access link is shown once. Share it only with the intended person.
         </p>
       )}
       <div className="mt-6 flex justify-end">
-        <PrimaryButton onClick={onClose}>{sent ? "Done" : "Close without sending"}</PrimaryButton>
+        <PrimaryButton onClick={onClose} disabled={busy}>{sent ? "Done" : "Close without sending"}</PrimaryButton>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@
  * and sits in the "..." menu on the other views (HR officers do not have it at all).
  */
 import Link from "next/link";
+import { useAuthLive } from "@/lib/ui/auth-live";
 import { useRef, useState } from "react";
 import { ApplicantsList } from "@/components/admin/applicants/ApplicantsList";
 import { InitialsAvatar } from "@/components/admin/applicants/parts";
@@ -44,6 +45,10 @@ const VIEWS: { key: View; label: string }[] = [
 const HIDE_INNER_TITLE = "[&_div:has(>div>h1.ap-pagehead-title)]:hidden";
 
 export function PeopleHub() {
+  return useAuthLive() ? <StaffDirectory /> : <PreviewPeopleHub />;
+}
+
+function PreviewPeopleHub() {
   const url = useUrlParams();
   const raw = url.get("view");
   const view: View = VIEWS.some((v) => v.key === raw) ? (raw as View) : "applicants";

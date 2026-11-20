@@ -13,7 +13,6 @@ import { PhoneInput } from "@/components/applicant/form-fields";
 import { useIsClient } from "@/components/applicant/motion";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { useDialogFocus } from "@/lib/a11y/useDialogFocus";
-import { useRoles } from "@/lib/admin/lists/store";
 import { loadPlacementChoices, type PlacementChoice } from "@/lib/admin/org-records/live";
 import type { ClientFields, OutletFields, StaffFields } from "@/lib/admin/org-records/writes";
 import { orgErrorMessage } from "@/lib/admin/org-records/transport";
@@ -90,9 +89,9 @@ export function ClientSheet({ mode, initial, busy, error, onCancel, onSubmit }: 
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [businessType, setType] = useState(initial?.businessType ?? "");
+  const listId = useId();
   const [city, setCity] = useState(initial?.city ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
-  const listId = useId();
   const ready = name.trim().length >= 2 && !!businessType.trim() && !!city.trim();
   return (
     <Shell
@@ -155,7 +154,7 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-export function StaffSheet({ busy, error, onCancel, onSubmit }: { busy: boolean; error: string | null; onCancel: () => void; onSubmit: (v: StaffFields) => void }) {
+export function StaffSheet({ busy, error, onCancel, onSubmit, title = "Add staff member", submitLabel = "Add staff member", description = "A minimal record: who they are and where they work. The Staff ID is created for you. This does not give them access or send an email.", onUseExisting }: { busy: boolean; error: string | null; onCancel: () => void; onSubmit: (v: StaffFields) => void; title?: string; submitLabel?: string; description?: string; onUseExisting?: () => void }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -165,8 +164,6 @@ export function StaffSheet({ busy, error, onCancel, onSubmit }: { busy: boolean;
   const [startDate, setStart] = useState(today);
   const [choices, setChoices] = useState<PlacementChoice[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const roles = useRoles();
-  const listId = useId();
   const startId = useId();
   useEffect(() => {
     let off = false;
@@ -179,15 +176,15 @@ export function StaffSheet({ busy, error, onCancel, onSubmit }: { busy: boolean;
   const ready = fullName.trim().length >= 2 && emailOk && canon !== null && !!clientId && !!outletId && !!role.trim() && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate <= today();
   return (
     <Shell
-      title="Add staff member" busy={busy} error={error ?? loadError} ready={ready && !loadError} submitLabel="Add staff member" onCancel={onCancel}
-      description="A minimal record: who they are and where they work. The Staff ID is created for you. This does not give them access or send an email."
+      title={title} busy={busy} error={error ?? loadError} ready={ready && !loadError} submitLabel={submitLabel} onCancel={onCancel}
+      description={description}
       onSubmit={() => onSubmit({ fullName, email, phone: canon ?? "", department: "", placement: { clientId, outletId, role, startDate } })}
     >
+      {onUseExisting ? <button type="button" className="ap-btn ap-btn-s mt-4" disabled={busy} onClick={onUseExisting}>Invite someone already in Staff Directory</button> : null}
       <Field label="Full name" required value={fullName} onChange={setFullName} max={200} />
       <Field label="Email" required type="email" value={email} onChange={setEmail} max={254} />
       <PhoneField label="Phone" value={phone} onChange={setPhone} />
-      <Field label="Role or job title" required value={role} onChange={setRole} max={80} list={listId} />
-      <datalist id={listId}>{roles.map((r) => <option key={r.id} value={r.name} />)}</datalist>
+      <Field label="Role or job title" required value={role} onChange={setRole} max={80} />
       <label className={LABEL}>Client</label>
       <SelectMenu label="Client" value={clientId} placeholder={choices ? "Choose a client" : "Loading clients..."} onChange={(v) => { setClientId(v); setOutletId(""); }} options={(choices ?? []).map((c) => ({ value: c.id, label: c.name }))} className="mt-1.5" />
       <label className={LABEL}>Outlet</label>

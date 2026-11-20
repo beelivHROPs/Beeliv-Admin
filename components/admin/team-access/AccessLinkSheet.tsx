@@ -9,7 +9,7 @@ import { CancelButton, PrimaryButton, SheetFrame } from "@/components/admin/offe
 import { formatDate } from "@/lib/applicant/time";
 import type { AccessLink } from "@/lib/admin/team-access/types";
 
-export function AccessLinkSheet({ name, link, onClose }: { name: string; link: AccessLink; onClose: () => void }) {
+export function AccessLinkSheet({ name, link, onClose, embedded = false }: { name: string; link: AccessLink; onClose: () => void; embedded?: boolean }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Clearing is best effort: browsers may refuse it, and it only runs while this document is focused.
@@ -32,6 +32,17 @@ export function AccessLinkSheet({ name, link, onClose }: { name: string; link: A
       setCopied("failed");
     }
   }
+  const content = <>
+      <label htmlFor="access-link" className="text-[13px] font-bold text-(--ap-ink-2)">
+        Link
+      </label>
+      <input id="access-link" readOnly className="ap-input mt-1.5 w-full font-mono text-[13px]" value={link.url} onFocus={(e) => e.currentTarget.select()} autoComplete="off" spellCheck={false} />
+      <p className="mt-3 text-[14px] text-(--ap-muted)">Expires {formatDate(link.expiresAt)}.</p>
+      <p role="status" className="mt-2 min-h-5 text-[13px] font-semibold text-(--ap-muted)">
+        {copied === "yes" ? "Link copied." : copied === "failed" ? "Could not copy automatically. Select the link and copy it." : ""}
+      </p>
+  </>;
+  if (embedded) return <div>{content}<div className="mt-4 flex justify-end gap-3"><CancelButton onClick={onClose} label="Done" /><PrimaryButton onClick={() => void copy()}>{copied === "yes" ? "Copied" : "Copy link"}</PrimaryButton></div></div>;
   return (
     <SheetFrame
       title={`Access link for ${name}`}
@@ -44,14 +55,7 @@ export function AccessLinkSheet({ name, link, onClose }: { name: string; link: A
         </>
       }
     >
-      <label htmlFor="access-link" className="text-[13px] font-bold text-(--ap-ink-2)">
-        Link
-      </label>
-      <input id="access-link" readOnly className="ap-input mt-1.5 w-full font-mono text-[13px]" value={link.url} onFocus={(e) => e.currentTarget.select()} autoComplete="off" spellCheck={false} />
-      <p className="mt-3 text-[14px] text-(--ap-muted)">Expires {formatDate(link.expiresAt)}.</p>
-      <p role="status" className="mt-2 min-h-5 text-[13px] font-semibold text-(--ap-muted)">
-        {copied === "yes" ? "Link copied." : copied === "failed" ? "Could not copy automatically. Select the link and copy it." : ""}
-      </p>
+      {content}
     </SheetFrame>
   );
 }
