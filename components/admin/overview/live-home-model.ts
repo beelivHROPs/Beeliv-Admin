@@ -2,7 +2,7 @@ export type HomeMetric = { status: "available"; count: number } | { status: "res
 export const HOME_METRICS = [
   { key: "staffPlaced", label: "Staff placed", href: "/admin/staff/directory" },
   { key: "staffUnplaced", label: "Staff not yet placed", href: "/admin/staff/assignments" },
-  { key: "activeClients", label: "Active clients", href: "/admin/clients" },
+  { key: "activeClients", label: "Clients", href: "/admin/clients" },
   { key: "activeOutlets", label: "Active outlets", href: "/admin/clients" },
   { key: "documentsAwaitingHr", label: "Documents awaiting review", href: "/admin/staff/documents" },
   { key: "pendingInvitations", label: "Pending invitations", href: "/admin/team-access" },

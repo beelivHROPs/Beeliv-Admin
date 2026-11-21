@@ -13,7 +13,7 @@ type Summary = { generatedAt: string; staffPlaced: Metric; staffUnplaced: Metric
 const TILES: { key: Exclude<keyof Summary, "generatedAt">; label: string }[] = [
   { key: "staffPlaced", label: "Staff placed" },
   { key: "staffUnplaced", label: "Staff not yet placed" },
-  { key: "activeClients", label: "Active clients" },
+  { key: "activeClients", label: "Clients" },
   { key: "activeOutlets", label: "Active outlets" },
   { key: "documentsAwaitingHr", label: "Documents awaiting review" },
   { key: "pendingInvitations", label: "Pending invitations" },
