@@ -10,6 +10,8 @@ import { getAccountSetup, getSession, signOut } from "@/lib/auth/service";
 import { returningAdminNeedsMfa } from "@/lib/auth/admin-entry";
 import { destinationFor, hasAccess, readAccess } from "@/lib/server/auth/policy";
 import { setupErrorText } from "@/lib/admin/setup/types";
+import { ConfirmHost, confirmAction } from "@/components/applicant/ConfirmDialog";
+import { LogOut } from "@/components/applicant/icons";
 
 /** A returning sign-in, not another first-run setup. All authority stays on server. */
 export function VerifySignIn() {
@@ -18,6 +20,8 @@ export function VerifySignIn() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  /** Brief "you're in" confirmation after the code is accepted (lead 2026-11-21), then the dashboard opens. */
+  const [success, setSuccess] = useState(false);
   const working = useRef(false);
   const active = useRef(false);
   const mfaBusy = useRef(false);
@@ -43,6 +47,9 @@ export function VerifySignIn() {
       if (!active.current) return;
       const access = session.ok === true ? readAccess("access" in session ? session.access : null, "admin") : null;
       if (!hasAccess(access) || !access) throw new Error("unavailable");
+      setSuccess(true);
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      if (!active.current) return;
       router.replace(destinationFor(access)); router.refresh();
     } catch (e) { if (active.current) setError(setupErrorText(e, "We couldn't finish signing you in. Please try again.")); }
     finally { working.current = false; if (active.current) setFinishing(false); }
@@ -67,11 +74,22 @@ export function VerifySignIn() {
     "--ap-muted": "#61535b", "--ap-line": "#9b8e95", "--ap-violet": "#8b2252",
     "--ap-rose": "#b42318", "--ap-rose-bg": "#fff1f0",
   } as CSSProperties}><AuthBody as="div" ariaBusy={finishing}>
+    {success ? (
+      <div role="status" aria-live="polite" className="flex flex-col items-start gap-4 py-6">
+        <span className="inline-flex size-14 items-center justify-center rounded-full bg-[#e7f6ec] text-[#1a7f3c]" aria-hidden="true">
+          <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+        </span>
+        <AuthHeading lead="You're" accent="in." sub="Opening your dashboard..." />
+      </div>
+    ) : <>
     <AuthHeading lead="Enter your" accent="code." sub="Type the 6-digit code from your authenticator app." />
     {ready && !finishing ? <MfaPanel service={service} onVerified={() => void complete()} onBusyChange={onMfaBusy} embedded signIn /> : !error ? <p role="status">Checking your sign-in...</p> : null}
     {error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => void load()} className="ap-btn ap-btn-s mt-3">Try again</button></div> : null}
-    <button type="button" disabled={finishing || checkingCode} className="text-sm underline" onClick={() => {
+    <ConfirmHost />
+    <button type="button" disabled={finishing || checkingCode} className="text-sm underline" onClick={async () => {
       if (working.current || mfaBusy.current) return;
+      const ok = await confirmAction({ tone: "neutral", icon: LogOut, title: "Sign out of Beeliv Admin?", description: "You'll need your password and code to sign back in.", confirmLabel: "Sign out", cancelLabel: "Stay signed in" });
+      if (!ok || working.current || mfaBusy.current) return;
       working.current = true; setFinishing(true);
       void signOut("admin").then(result => {
         if (!active.current) return;
@@ -79,5 +97,6 @@ export function VerifySignIn() {
         else setError(result.error.message);
       }).finally(() => { working.current = false; if (active.current) setFinishing(false); });
     }}>Sign out</button>
+    </>}
   </AuthBody></div></AuthFrame>;
 }
