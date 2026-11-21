@@ -45,13 +45,18 @@ const VIEWS: { key: View; label: string }[] = [
 const HIDE_INNER_TITLE = "[&_div:has(>div>h1.ap-pagehead-title)]:hidden";
 
 export function PeopleHub() {
-  return useAuthLive() ? <StaffDirectory /> : <PreviewPeopleHub />;
+  return <PreviewPeopleHub live={useAuthLive()} />;
 }
 
-function PreviewPeopleHub() {
+/** Live: only views with REAL data (Applicants from submitted applications, Staff from org records). Talent pool and
+ *  "All" return when the talent-pool backend exists; they are never filled with sample people. */
+const LIVE_VIEWS: View[] = ["applicants", "staff"];
+
+function PreviewPeopleHub({ live }: { live: boolean }) {
   const url = useUrlParams();
   const raw = url.get("view");
-  const view: View = VIEWS.some((v) => v.key === raw) ? (raw as View) : "applicants";
+  const views = live ? VIEWS.filter((v) => LIVE_VIEWS.includes(v.key)) : VIEWS;
+  const view: View = views.some((v) => v.key === raw) ? (raw as View) : "applicants";
 
   function choose(k: View) {
     // Each list keeps its own filters in the URL, so switching starts clean.
@@ -63,15 +68,17 @@ function PreviewPeopleHub() {
 
   // Phones: one tab row with the count INSIDE each tab, shown under the search card (see PhoneScopeSlot).
   const nA = useApplicantsList({ search: "", tab: "all", stage: "", vacancyId: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 1 }).data?.total;
-  const nP = useTalentPool({ search: "", tab: "all", skill: "", department: "", location: "", lastContact: "", sort: "newest", page: 1, pageSize: 1 }).data?.total;
-  const nS = useStaffList({ search: "", clientId: "", outletId: "", department: "", role: "", status: "", sort: "name", page: 1, pageSize: 1 }).data?.total;
-  const phoneTabs = <ListTabs label="Choose who to show" tabs={VIEWS.map((v) => ({ ...v, count: v.key === "applicants" ? nA : v.key === "pool" ? nP : v.key === "staff" ? nS : nA !== undefined && nP !== undefined && nS !== undefined ? nA + nP + nS : undefined }))} value={view} onChange={choose} />;
+  const nPAll = useTalentPool({ search: "", tab: "all", skill: "", department: "", location: "", lastContact: "", sort: "newest", page: 1, pageSize: 1 }).data?.total;
+  const nSAll = useStaffList({ search: "", clientId: "", outletId: "", department: "", role: "", status: "", sort: "name", page: 1, pageSize: 1 }).data?.total;
+  const nP = live ? undefined : nPAll;
+  const nS = live ? undefined : nSAll;
+  const phoneTabs = <ListTabs label="Choose who to show" tabs={views.map((v) => ({ ...v, count: v.key === "applicants" ? nA : v.key === "pool" ? nP : v.key === "staff" ? nS : nA !== undefined && nP !== undefined && nS !== undefined ? nA + nP + nS : undefined }))} value={view} onChange={choose} />;
 
   const allCount = nA !== undefined && nP !== undefined && nS !== undefined ? nA + nP + nS : undefined;
   const deskPills = (
     <DeskPills
       label="Choose who to show"
-      pills={VIEWS.map((v) => ({ key: v.key, label: v.label, count: v.key === "applicants" ? nA : v.key === "pool" ? nP : v.key === "staff" ? nS : allCount, active: view === v.key, onClick: () => choose(v.key) }))}
+      pills={views.map((v) => ({ key: v.key, label: v.label, count: v.key === "applicants" ? nA : v.key === "pool" ? nP : v.key === "staff" ? nS : allCount, active: view === v.key, onClick: () => choose(v.key) }))}
     />
   );
 

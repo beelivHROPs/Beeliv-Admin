@@ -268,7 +268,7 @@ function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolea
         title="Application"
         rows={[
           { label: "Role", value: a.vacancy },
-          { label: "Client", value: `${a.client} (${a.outlet})` },
+          { label: "Client", value: a.outlet ? `${a.client} (${a.outlet})` : a.client },
           { label: "Next step", value: a.nextRequired.title },
           { label: "Recruiter", value: a.recruiter?.name ?? "Unassigned" },
           { label: "Expected salary", value: a.expectedSalary.allowed ? a.expectedSalary.value : null },
@@ -297,7 +297,7 @@ function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolea
             <h1 className={`${DETAIL_TITLE} leading-tight break-words`}>{a.name}</h1>
             <p className="mt-1 text-[14px] break-all text-(--ap-muted) max-[767px]:hidden">{a.reference}</p>
             <p className="mt-2 text-[15px] leading-snug break-words max-[767px]:mt-1 max-[767px]:text-[14px]">
-              <b>{a.vacancy}</b>, {a.client} ({a.outlet})
+              <b>{a.vacancy}</b>, {a.client}{a.outlet ? ` (${a.outlet})` : ""}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] text-(--ap-ink-2) max-[767px]:mt-2 max-[767px]:gap-x-3 max-[767px]:text-[13px]">
               <span className="ad-dtable inline-flex"><StageMark row={a} /></span>

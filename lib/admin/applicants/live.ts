@@ -1,0 +1,230 @@
+"use client";
+
+/**
+ * LIVE Applicants adapter: the approved HR Applicants screens on REAL submitted applications
+ * (POST /api/admin/applications/{list,read}, lib/server/applications). The server checks the Admin session (AAL2),
+ * role and client scope; nothing here is authority. No sample people, notes, interviews or recruiters are invented:
+ * what the backend does not hold yet is empty, and recruitment actions stay hidden (capabilities false) until their
+ * backend exists.
+ */
+import { RestrictedError, type AdapterEvent } from "../adapter";
+import type { ApplicantsAdapter } from "./adapter";
+import type {
+  ActivityRecord,
+  ApplicantDetail,
+  ApplicantDocument,
+  ApplicantRow,
+  ApplicantsPage,
+  ApplicantsQuery,
+  ApplicantStatus,
+  DocState,
+  StageTab,
+  SubmissionField,
+  SubmissionSection,
+} from "./types";
+
+/* ---------- wire DTOs (mirror lib/server/applications/types.ts; copied, never imported from lib/server) ---------- */
+type Lifecycle = "submitted" | "in_talent_pool" | "not_selected" | "withdrawn" | "completed";
+type Form = {
+  fullName?: string; preferredName?: string; phone?: string; whatsapp?: string; email?: string; yearsExperience?: string;
+  expectedSalary?: string; availability?: string; earliestStart?: string; preferredLocation?: string;
+  willingShifts?: "Yes" | "No"; willingWeekends?: "Yes" | "No"; willingHolidays?: "Yes" | "No";
+  sectors?: string[]; skills?: Record<string, string[]>; screeningAnswers?: Record<string, string>;
+};
+type RowDto = {
+  applicationId: string; vacancyId: string; vacancyReference: string; role: string; clientId: string; clientName: string;
+  outletId: string | null; applicantName: string; lifecycle: Lifecycle; stage: number; submittedAt: string;
+};
+type DetailDto = RowDto & {
+  form: Form;
+  attachments: { slot: "cv" | "passport-photo" | "valid-id"; versionNumber: number; scanState: string; reviewState: string }[];
+  events: { action: "draft_opened" | "submitted"; at: string }[];
+};
+type PageDto = { items: RowDto[]; total: number; page: number; pageSize: number };
+
+async function call<T>(action: "list" | "read", body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`/api/admin/applications/${action}`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => null)) as ({ ok?: boolean; error?: { code?: string } } & Record<string, unknown>) | null;
+  if (json?.ok === true) {
+    const { ok: _ok, ...rest } = json;
+    void _ok;
+    return rest as T;
+  }
+  const code = json?.error?.code;
+  if (code === "forbidden" || code === "unauthenticated") throw new RestrictedError();
+  throw new Error(code ?? "unavailable");
+}
+
+/* ---------- mapping ---------- */
+const STATUS: Record<Lifecycle, ApplicantStatus> = { submitted: "active", completed: "active", in_talent_pool: "talent-pool", not_selected: "rejected", withdrawn: "rejected" };
+const PROFILE_KEYS: (keyof Form)[] = ["fullName", "phone", "email", "yearsExperience", "availability", "earliestStart", "preferredLocation", "expectedSalary"];
+
+function profilePercent(f: Form | null): number {
+  if (!f) return 100; // list rows: the server accepted a complete submission
+  const filled = PROFILE_KEYS.filter((k) => typeof f[k] === "string" && (f[k] as string).trim()).length + (f.sectors?.length ? 1 : 0) + (f.skills && Object.values(f.skills).some((v) => v.length) ? 1 : 0);
+  return Math.round((filled / (PROFILE_KEYS.length + 2)) * 100);
+}
+
+function toRow(d: RowDto, form: Form | null = null): ApplicantRow {
+  const fresh = d.lifecycle === "submitted" && d.stage === 0;
+  return {
+    id: d.applicationId,
+    reference: "",
+    applicationRef: d.vacancyReference,
+    name: d.applicantName,
+    vacancyId: d.vacancyId,
+    vacancy: d.role,
+    clientId: d.clientId,
+    client: d.clientName,
+    outlet: "",
+    appliedAt: d.submittedAt,
+    updatedAt: d.submittedAt,
+    stage: Math.max(0, d.stage),
+    status: STATUS[d.lifecycle] ?? "active",
+    shortlisted: false,
+    recruiter: null,
+    profilePercent: profilePercent(form),
+    // Submit is refused unless the CV, passport photo and valid ID are all scan-clean, so a submitted application has them.
+    documentsPercent: 100,
+    nextAction: fresh ? "Review application" : null,
+    needsAttention: fresh,
+    inTalentPool: d.lifecycle === "in_talent_pool",
+  };
+}
+
+const SLOT_LABEL = { cv: "CV", "passport-photo": "Passport photograph", "valid-id": "Valid ID" } as const;
+function docState(scan: string, review: string): DocState {
+  if (review === "verified") return "verified";
+  if (review === "rejected" || scan === "rejected") return "rejected";
+  if (review === "resubmission_required") return "missing";
+  if (scan === "clean") return "needs-review";
+  return "uploaded";
+}
+
+function field(id: string, label: string, value: string | undefined | null, items?: string[]): SubmissionField {
+  return { id, label, value: value && value.trim() ? value : items?.length ? null : null, ...(items?.length ? { items } : {}) };
+}
+
+function toDetail(d: DetailDto): ApplicantDetail {
+  const f = d.form ?? {};
+  const skills = Object.values(f.skills ?? {}).flat();
+  const documents: ApplicantDocument[] = d.attachments.map((a) => ({
+    id: `${a.slot}-${a.versionNumber}`,
+    type: SLOT_LABEL[a.slot],
+    state: docState(a.scanState, a.reviewState),
+    uploadedAt: null,
+    reviewer: null,
+    group: a.slot === "cv" ? "cv" : "checklist",
+  }));
+  const sections: SubmissionSection[] = [
+    { id: "personal", kind: "personal", title: "Personal details", lastEditedAt: null, fields: [field("fullName", "Full name", f.fullName), field("preferredName", "Preferred name", f.preferredName), field("phone", "Phone", f.phone), field("whatsapp", "WhatsApp", f.whatsapp), field("email", "Email", f.email)] },
+    { id: "experience", kind: "experience", title: "Experience", lastEditedAt: null, fields: [field("yearsExperience", "Years of experience", f.yearsExperience), field("sectors", "Sectors", null, f.sectors ?? [])] },
+    { id: "skills", kind: "skills", title: "Skills", lastEditedAt: null, fields: Object.entries(f.skills ?? {}).filter(([, v]) => v.length).map(([k, v]) => field(`skills-${k}`, k, null, v)) },
+    {
+      id: "availability", kind: "availability", title: "Availability", lastEditedAt: null,
+      fields: [field("availability", "Availability", f.availability), field("earliestStart", "Earliest start", f.earliestStart), field("preferredLocation", "Preferred location", f.preferredLocation), field("expectedSalary", "Expected salary", f.expectedSalary), field("willingShifts", "Willing to work shifts", f.willingShifts), field("willingWeekends", "Willing to work weekends", f.willingWeekends), field("willingHolidays", "Willing to work public holidays", f.willingHolidays)],
+    },
+    { id: "documents", kind: "documents", title: "Documents", lastEditedAt: null, fields: documents.map((doc) => field(doc.id, doc.type, doc.state === "needs-review" ? "Virus-checked, waiting for HR review" : doc.state === "verified" ? "Verified" : doc.state === "rejected" ? "Rejected" : "Checking")) },
+  ];
+  const activity: ActivityRecord[] = d.events.map((e, i) => ({ id: `ev-${i}`, actor: d.applicantName, at: e.at, action: e.action === "submitted" ? "Application submitted" : "Application started", from: null, to: null }));
+  return {
+    ...toRow(d, f),
+    email: f.email ?? "",
+    phone: f.phone ?? "",
+    location: f.preferredLocation ?? "",
+    professionalSummary: "",
+    experience: [],
+    skills,
+    availability: f.availability ?? "",
+    preferredLocations: f.preferredLocation ? [f.preferredLocation] : [],
+    expectedSalary: f.expectedSalary ? { allowed: true, value: f.expectedSalary } : { allowed: true, value: "" },
+    sensitive: [],
+    employmentType: "",
+    interviewState: "Not scheduled",
+    assessmentState: "",
+    nextRequired: { title: "Review this application", detail: "Check the answers and documents. Shortlisting, interviews and approval are being connected next.", owner: "hr" },
+    capabilities: { canShortlist: false, canHold: false, canReject: false, canRequestInfo: false, canSubmitForApproval: false, canApproveSelection: false, canAddNote: false, canMoveToTalentPool: false },
+    documents,
+    screening: [],
+    submission: { submittedAt: d.submittedAt, sections: sections.filter((s) => s.fields.length) },
+    interviews: [],
+    notes: [],
+    activity,
+  };
+}
+
+/* ---------- list: fetch the scoped set (bounded), then search/filter/sort/grow on the client ---------- */
+async function fetchAll(vacancyId: string): Promise<RowDto[]> {
+  const rows: RowDto[] = [];
+  for (let page = 1; page <= 4; page++) {
+    const p = await call<PageDto>("list", { page, pageSize: 50, ...(vacancyId ? { vacancyId } : {}) });
+    rows.push(...p.items);
+    if (rows.length >= p.total || p.items.length < 50) break;
+  }
+  return rows;
+}
+
+function inTab(r: ApplicantRow, tab: StageTab): boolean {
+  if (tab === "all") return true;
+  if (tab === "talent-pool") return r.inTalentPool;
+  if (tab === "new") return r.status === "active" && r.stage === 0;
+  return false; // shortlisting / interview / documentation / approval are not recorded by the backend yet
+}
+
+const listeners = new Set<(e: AdapterEvent) => void>();
+
+export const liveApplicantsAdapter: ApplicantsAdapter = {
+  subscribe(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+  async listApplicants(q: ApplicantsQuery): Promise<ApplicantsPage> {
+    const all = (await fetchAll(q.vacancyId)).map((d) => toRow(d));
+    const term = q.search.trim().toLowerCase();
+    const matched = all.filter(
+      (r) =>
+        (!term || [r.name, r.vacancy, r.client, r.applicationRef].some((v) => v.toLowerCase().includes(term))) &&
+        (!q.clientId || r.clientId === q.clientId) &&
+        (!q.stage || (q.stage === "rejected" ? r.status === "rejected" : q.stage === "hold" ? r.status === "hold" : String(r.stage) === q.stage)),
+    );
+    const tabs: StageTab[] = ["all", "new", "shortlisted", "interview", "documentation", "approval", "talent-pool"];
+    const tabCounts = Object.fromEntries(tabs.map((t) => [t, matched.filter((r) => inTab(r, t)).length])) as Record<StageTab, number>;
+    const sorted = matched.filter((r) => inTab(r, q.tab)).sort((a, b) =>
+      q.sort === "oldest" ? a.appliedAt.localeCompare(b.appliedAt) : q.sort === "name" ? a.name.localeCompare(b.name) : q.sort === "updated" ? b.updatedAt.localeCompare(a.updatedAt) : b.appliedAt.localeCompare(a.appliedAt),
+    );
+    const uniq = <T extends { id: string }>(xs: T[]) => [...new Map(xs.map((x) => [x.id, x])).values()];
+    return {
+      rows: sorted.slice(0, Math.max(1, q.page) * q.pageSize),
+      tabCounts,
+      total: sorted.length,
+      workspaceEmpty: all.length === 0,
+      facets: {
+        vacancies: uniq(all.map((r) => ({ id: r.vacancyId, name: r.vacancy }))),
+        clients: uniq(all.map((r) => ({ id: r.clientId, name: r.client }))),
+        recruiters: [],
+      },
+    };
+  },
+  async getApplicant(id: string): Promise<ApplicantDetail | null> {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    try {
+      return toDetail(await call<DetailDto>("read", { applicationId: id }));
+    } catch (e) {
+      if (e instanceof RestrictedError) throw e;
+      if (e instanceof Error && (e.message === "invalid_request" || e.message === "not_found")) return null;
+      throw e;
+    }
+  },
+  async performAction() {
+    throw new Error("Recruitment actions are not connected yet.");
+  },
+  async addNote() {
+    throw new Error("Notes are not connected yet.");
+  },
+};
