@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/server/auth/config";
+import { returningAdminNeedsMfa } from "@/lib/auth/admin-entry";
 import { parseSetup } from "@/lib/auth/setup-wire";
 import { canVisit, readAccess, type AuthApp } from "@/lib/server/auth/policy";
 import { RateFailure, rejectRpcRateLimit } from "@/lib/server/auth/rate";
@@ -64,7 +65,7 @@ export async function proxy(request: NextRequest) {
       rejectRpcRateLimit(rawSetup);
       const setup = parseSetup({ ok: true, setup: rawSetup }, app);
       if (setup.ok && setup.setup.state !== "suspended") {
-        const setupPath = app === "admin" ? "/admin/setup" : app === "client" ? "/client/setup" : "/staff";
+        const setupPath = returningAdminNeedsMfa(setup.setup) ? "/admin/login/verify" : app === "admin" ? "/admin/setup" : app === "client" ? "/client/setup" : "/staff";
         const ownSetupPath = app === "talent" ? "/staff/setup" : setupPath;
         if (path === setupPath || path === ownSetupPath || path.startsWith(ownSetupPath + "/") || (app === "talent" && path === "/staff/documents")) return response;
         const redirect = NextResponse.redirect(new URL(setupPath, config.origin));
