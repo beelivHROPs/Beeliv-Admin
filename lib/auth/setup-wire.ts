@@ -26,5 +26,5 @@ export function parseSetup(value: unknown, portal: Portal): SetupResult {
     agreements.push({ id: a.id, code: String(a.code), version: String(a.version), title: String(a.title), body: String(a.body), bodyHash: String(a.bodyHash), required: a.required, response: a.response });
   }
   if (new Set(agreements.map(a => a.id)).size !== agreements.length) return authFailure();
-  return { ok: true, setup: { id: s.id, revision: Number(s.revision), app, kind, origin: s.origin as SetupSummary["origin"], state: s.state as SetupState, verifiedEmail: s.verifiedEmail, fullName: s.fullName, phone: s.phone, contentReady: s.contentReady, mfaRequired: s.mfaRequired, mfaVerified: s.mfaVerified, agreements, reacceptRequired: s.reacceptRequired === true } };
+  return { ok: true, setup: { id: s.id, revision: Number(s.revision), app, kind, origin: s.origin as SetupSummary["origin"], state: s.state as SetupState, verifiedEmail: s.verifiedEmail, fullName: s.fullName, phone: s.phone, contentReady: s.contentReady, mfaRequired: s.mfaRequired, mfaVerified: s.mfaVerified, agreements, ...(s.reacceptRequired === undefined ? {} : { reacceptRequired: s.reacceptRequired === true }) } };
 }

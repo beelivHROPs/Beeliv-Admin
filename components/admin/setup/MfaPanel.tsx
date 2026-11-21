@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CodeBoxes } from "@/components/shared/auth/CodeBoxes";
 import { ShieldCheck } from "@/components/applicant/icons";
-import { CHIP, Field, INPUT_CLS } from "@/components/applicant/apply/parts";
+import { CHIP } from "@/components/applicant/apply/parts";
 import type { SetupAdapter } from "@/lib/admin/setup/adapter";
 import { type MfaEnrollment, type MfaFactor, setupErrorText } from "@/lib/admin/setup/types";
 
@@ -33,13 +34,14 @@ function qrSrc(qr: string | null): string | null {
  * component's memory and vanish on cancel, success or navigation.
  * Never offers to replace or remove a verified device (no such endpoint).
  */
-export function MfaPanel({ onVerified, service, embedded = false }: { onVerified: () => void; service: SetupAdapter; preview?: boolean; /** Inside the setup step card, which already shows the title and reason: drop the repeated icon, title and intro. */ embedded?: boolean }) {
+export function MfaPanel({ onVerified, service, embedded = false, onBusyChange }: { onVerified: () => void; service: SetupAdapter; onBusyChange?: (busy: boolean) => void; preview?: boolean; /** Inside the setup step card, which already shows the title and reason: drop the repeated icon, title and intro. */ embedded?: boolean }) {
   const [factors, setFactors] = useState<MfaFactor[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState<null | "enroll" | "verify" | "cancel">(null);
   const [error, setError] = useState<string | null>(null);
+  const working = useRef(false);
 
   const load = useCallback(() => {
     setLoadFailed(false);
@@ -62,6 +64,9 @@ export function MfaPanel({ onVerified, service, embedded = false }: { onVerified
   const codeOk = /^\d{6}$/.test(code);
 
   async function run(kind: "enroll" | "verify" | "cancel", fn: () => Promise<void>) {
+    if (working.current) return;
+    working.current = true;
+    onBusyChange?.(true);
     setBusy(kind);
     setError(null);
     try {
@@ -69,14 +74,17 @@ export function MfaPanel({ onVerified, service, embedded = false }: { onVerified
     } catch (e) {
       setError(setupErrorText(e));
     } finally {
+      working.current = false;
+      onBusyChange?.(false);
       setBusy(null);
     }
   }
 
   const enroll = () => run("enroll", async () => setEnrollment(await service.mfaEnroll()));
-  const verify = (factorId: string) =>
+  const verify = (factorId: string, enteredCode = code) =>
     run("verify", async () => {
-      await service.mfaVerify(factorId, code);
+      if (!/^\d{6}$/.test(enteredCode)) return;
+      await service.mfaVerify(factorId, enteredCode);
       // Only reachable on a real server success: clear secrets, reload setup, then finish.
       setEnrollment(null);
       setCode("");
@@ -92,9 +100,8 @@ export function MfaPanel({ onVerified, service, embedded = false }: { onVerified
 
   const codeField = (id: string, factorId: string) => (
     <div className="mt-4 max-w-[320px]">
-      <Field label="Six-digit code from your app" htmlFor={id} hint="Six digits. It changes every 30 seconds.">
-        <input id={id} className={`${INPUT_CLS} tracking-[.3em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-      </Field>
+      <CodeBoxes id={id} label="Six-digit code from your app" hint="Six digits. It changes every 30 seconds." value={code}
+        onChange={(value) => { setCode(value); setError(null); }} onComplete={(value) => void verify(factorId, value)} disabled={busy !== null} error={error} />
       <button type="button" disabled={!codeOk || busy !== null} onClick={() => void verify(factorId)} className={`${BTN} ap-btn-p mt-3 text-white! ${FOCUS}`}>
         {busy === "verify" ? "Checking..." : "Verify code"}
       </button>
@@ -180,7 +187,7 @@ export function MfaPanel({ onVerified, service, embedded = false }: { onVerified
         )}
 
         <div aria-live="polite">
-          {error ? (
+          {error && !enrollment && !verified ? (
             <p role="alert" className="mt-3 rounded-xl bg-(--ap-rose-bg) px-3.5 py-2.5 text-[15px] text-(--ap-rose)">
               {error}
             </p>
