@@ -53,7 +53,8 @@ export const HR_NAV: AdminNavGroup[] = [
   {
     label: "Administration",
     items: [
-      { href: "/admin/workforce/attendance", label: "Attendance", icon: Clock3, section: "Workforce" },
+      { href: "/admin/staff/assignments", label: "Assignments", icon: Briefcase, section: "Workforce" },
+      { href: "/admin/workforce/attendance", label: "Attendance", icon: Clock3 },
       { href: "/admin/workforce/leave", label: "Leave", icon: Activity },
       { href: "/admin/workforce/scheduling", label: "Scheduling", icon: Calendar },
       { href: "/admin/workforce/warnings", label: "Warnings", icon: ShieldAlert },
