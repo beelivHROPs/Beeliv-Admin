@@ -13,7 +13,7 @@ export type SummaryDependencies = {
   authorize(): Promise<AdminIdentity | null>;
   consumeLimit(uid: string): Promise<void>;
   staff(show: "all" | "unassigned"): Promise<Read<{ total: number }>>;
-  clients(page: number, status: "" | "active"): Promise<Read<Page<ClientRowDto>>>;
+  clients(page: number, status: "" | "active" | "onboarding" | "invited"): Promise<Read<Page<ClientRowDto>>>;
   client(id: string, after: string | null): Promise<Read<ClientDetailDto>>;
   documents(): Promise<Read<{ total: number }>>;
   invitations(after: InvitationListCursor | null): Promise<InvitationListResult>;
@@ -114,13 +114,20 @@ export async function getAdminSummary(deps: SummaryDependencies): Promise<{ ok: 
     if (staffUnplaced.count <= allMetric.count) staffPlaced = available(allMetric.count - staffUnplaced.count);
     else staffUnplaced = missing();
   } else if (allMetric.status === "restricted" || staffUnplaced.status === "restricted") staffPlaced = missing(true);
-  const clients = await safe(() => deps.clients(1, "active"));
+  // "Clients" = every client Beeliv works with that isn't deactivated. New clients stay "onboarding" until their
+  // account setup is done, and nothing moves them to "active" yet, so counting only "active" showed 0 next to real outlets.
+  const clientCounts = await Promise.all((["active", "onboarding", "invited"] as const).map((s) => safe(() => deps.clients(1, s))));
+  const clientMetrics = clientCounts.map((c) => (c ? total(c) : missing()));
+  const restrictedClients = clientMetrics.some((m) => m.status === "restricted");
+  const clientsMetric: Metric = clientMetrics.every((m) => m.status === "available")
+    ? available(clientMetrics.reduce((n, m) => n + (m.count ?? 0), 0))
+    : missing(restrictedClients);
   const documents = await safe(() => deps.documents());
   const activeOutlets = await safe(() => outlets(deps));
   const pendingInvitations = await safe(() => invitations(deps));
   return { ok: true, value: {
     generatedAt: deps.now().toISOString(), staffPlaced, staffUnplaced,
-    activeClients: clients ? total(clients) : missing(), activeOutlets: activeOutlets ?? missing(),
+    activeClients: clientsMetric, activeOutlets: activeOutlets ?? missing(),
     documentsAwaitingHr: documents ? total(documents) : missing(), pendingInvitations: pendingInvitations ?? missing(),
   } };
 }
