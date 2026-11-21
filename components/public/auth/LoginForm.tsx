@@ -115,6 +115,7 @@ export function LoginForm({
   const [summaryKey, setSummaryKey] = useState(0);
   const [sessionOpen, setSessionOpen] = useState(preview === "session-expired");
   const [arriving, setArriving] = useState(false);
+  const [arrivingKind, setArrivingKind] = useState<"login" | "login-job" | "login-staff">("login");
   const { register } = useFieldRefs<Field>();
   const unverifiedRef = useRef<HTMLDivElement>(null);
 
@@ -187,9 +188,10 @@ export function LoginForm({
     }
 
     setPending(true);
-    if (isTalent) setArriving(true);
     const res = await signIn({ email: email.trim(), password, remember, portal, next: inviteReturn ? null : next });
     if (res.ok) {
+      // The welcome screen only after a SUCCESSFUL sign-in, worded for where the person is going (Staff Hub vs applicant).
+      if (isTalent) { setArrivingKind(destinationFor(res).startsWith("/staff") ? "login-staff" : jobId ? "login-job" : "login"); setArriving(true); }
       // Welcome sound: Admin and Client portals only (no-op for talent / staff).
       playWelcome(portal);
       // Stay pending while the next page opens.
@@ -247,7 +249,7 @@ export function LoginForm({
 
   return (
     <>
-      {arriving ? <PreloaderScreen kind={jobId ? "login-job" : "login"} vars={{}} /> : null}
+      {arriving ? <PreloaderScreen kind={arrivingKind} vars={{}} /> : null}
       {!skeleton && <OfflineBanner />}
       {!skeleton && (
         <SessionExpiredDialog
