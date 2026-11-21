@@ -73,7 +73,7 @@ export function LoginForm({
     preview === "wrong" || preview === "unverified" ? "you@example.com" : "",
   );
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(portal === "admin");
   const [errors, setErrors] = useState<Partial<Record<Field, string | null>>>({});
   const [shake, setShake] = useState<Record<Field, number>>({ email: 0, password: 0 });
   const [submitted, setSubmitted] = useState(false);
