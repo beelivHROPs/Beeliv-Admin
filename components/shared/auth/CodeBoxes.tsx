@@ -40,14 +40,14 @@ export function CodeBoxes({ id, value, onChange, onComplete, disabled = false, e
     for (let offset = 0; offset < digits.length && start + offset < 6; offset++) next[start + offset] = digits[offset];
     commit(next, Math.min(5, start + digits.length));
   }
-  return <fieldset disabled={disabled} className="min-w-0 border-0 p-0" aria-describedby={`${base}-hint${error ? ` ${base}-error` : ""}`}>
+  return <fieldset disabled={disabled} className="min-w-0 border-0 p-0" aria-describedby={[hint ? `${base}-hint` : "", error ? `${base}-error` : ""].filter(Boolean).join(" ") || undefined}>
     <legend className="text-[13px] font-semibold text-(--ap-ink)">{label}</legend>
     <div className={`mt-2 flex gap-2 ${error ? "ap-shake" : ""}`}>
       {cells.map((digit, index) => <input key={index} ref={element => { inputs.current[index] = element; }}
         id={index === 0 ? base : `${base}-${index + 1}`} type="text" inputMode="numeric" autoComplete={index === 0 ? "one-time-code" : "off"}
-        aria-label={`Digit ${index + 1} of 6`} aria-invalid={!!error} aria-describedby={`${base}-hint${error ? ` ${base}-error` : ""}`}
+        aria-label={`Digit ${index + 1} of 6`} aria-invalid={!!error} aria-describedby={error ? `${base}-error` : undefined}
         maxLength={6} value={digit} disabled={disabled} spellCheck={false} autoCapitalize="none"
-        className={`h-12 min-w-0 w-11 rounded-xl border bg-(--ap-surface) text-center text-xl font-semibold text-(--ap-ink) outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ap-violet) ${error ? "border-(--ap-rose)" : "border-(--ap-line)"}`}
+        className={`h-12 min-w-0 w-11 rounded-md border bg-white text-center text-xl font-semibold text-black outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ap-violet) ${error ? "border-(--ap-rose)" : "border-[#8b7c85]"}`}
         onFocus={event => event.currentTarget.select()}
         onChange={event => fill(index, event.target.value)}
         onPaste={event => { event.preventDefault(); fill(index, event.clipboardData.getData("text")); }}
@@ -57,7 +57,7 @@ export function CodeBoxes({ id, value, onChange, onComplete, disabled = false, e
           if (event.key === "Delete") { event.preventDefault(); const next = [...cells]; next[index] = ""; commit(next, index); }
         }} />)}
     </div>
-    <p id={`${base}-hint`} className="mt-2 text-[13px] text-(--ap-muted)">{hint}</p>
+    {hint ? <p id={`${base}-hint`} className="mt-2 text-[13px] text-(--ap-muted)">{hint}</p> : null}
     {error ? <p id={`${base}-error`} role="alert" className="mt-2 text-[14px] font-semibold text-(--ap-rose)">{error}</p> : null}
   </fieldset>;
 }
