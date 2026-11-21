@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame, AuthBody } from "@/components/public/auth/AuthFrame";
 import { AuthHeading } from "@/components/public/auth/parts";
@@ -62,10 +62,13 @@ export function VerifySignIn() {
   }), [router, complete]);
   useEffect(() => { active.current = true; void load(); return () => { active.current = false; }; }, [load]);
 
-  return <AuthFrame screen="login" portal="admin"><AuthBody as="div" ariaBusy={finishing}>
-    <AuthHeading lead="Verify your" accent="sign-in." sub="Enter the code from your authenticator app. Your account setup is already complete." />
-    <p className="text-sm text-(--muted-text)">On a remembered browser, your verified session can stay signed in for up to 30 days. Signing out or clearing cookies requires verification again.</p>
-    {ready && !finishing ? <MfaPanel service={service} onVerified={() => void complete()} onBusyChange={onMfaBusy} embedded /> : !error ? <p role="status">Checking your sign-in...</p> : null}
+  return <AuthFrame screen="login" portal="admin"><div className="contents" style={{
+    "--ap-surface": "#ffffff", "--ap-ink": "#11111b", "--ap-ink-2": "#3b1828",
+    "--ap-muted": "#61535b", "--ap-line": "#9b8e95", "--ap-violet": "#8b2252",
+    "--ap-rose": "#b42318", "--ap-rose-bg": "#fff1f0",
+  } as CSSProperties}><AuthBody as="div" ariaBusy={finishing}>
+    <AuthHeading lead="Enter your" accent="code." sub="Type the 6-digit code from your authenticator app." />
+    {ready && !finishing ? <MfaPanel service={service} onVerified={() => void complete()} onBusyChange={onMfaBusy} embedded signIn /> : !error ? <p role="status">Checking your sign-in...</p> : null}
     {error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => void load()} className="ap-btn ap-btn-s mt-3">Try again</button></div> : null}
     <button type="button" disabled={finishing || checkingCode} className="text-sm underline" onClick={() => {
       if (working.current || mfaBusy.current) return;
@@ -76,5 +79,5 @@ export function VerifySignIn() {
         else setError(result.error.message);
       }).finally(() => { working.current = false; if (active.current) setFinishing(false); });
     }}>Sign out</button>
-  </AuthBody></AuthFrame>;
+  </AuthBody></div></AuthFrame>;
 }

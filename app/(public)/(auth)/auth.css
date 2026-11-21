@@ -479,3 +479,44 @@
     color: var(--beeliv-purple);
   }
 }
+
+/* Admin auth notice contrast: auth keeps its warm-white canvas even when the
+   workspace has a saved dark preference. Do not inherit dark workspace notice
+   text or translucent fills onto this light canvas. Other portals are untouched. */
+.public-site .au-shell[data-portal="admin"] {
+  --au-error: #b42318;
+  --au-error-tint: #fff1f0;
+}
+.public-site .au-shell[data-portal="admin"] .st {
+  --st-surface: #ffffff;
+  --st-ink: #3b1828;
+  --st-muted: #61535b;
+  --st-border: #dccbd3;
+  --st-danger: #b42318;
+  --st-danger-tint: #fff1f0;
+  --st-warn: #805300;
+  --st-warn-tint: #fff4db;
+  --st-info-tint: #fcf1f5;
+  --st-accent: #8b2252;
+  --st-accent-hover: #721b43;
+  --st-on-accent: #ffffff;
+}
+.public-site .au-shell[data-portal="admin"] .au-err {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.public-site .au-shell[data-portal="admin"] :is(.au-summary, .au-alert) {
+  border-color: var(--au-error);
+}
+.public-site .au-shell[data-portal="admin"] .au-summary a,
+.public-site .au-shell[data-portal="admin"] .au-summary a:hover {
+  color: inherit;
+  text-decoration: underline;
+}
+.public-site .au-shell[data-portal="admin"] .au-summary:focus-visible {
+  outline: 2px solid var(--au-error);
+  outline-offset: 3px;
+}
+.public-site .au-shell[data-portal="admin"] .st[data-tone="danger"] .st-title {
+  color: var(--st-danger);
+}

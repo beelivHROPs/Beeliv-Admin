@@ -34,7 +34,7 @@ function qrSrc(qr: string | null): string | null {
  * component's memory and vanish on cancel, success or navigation.
  * Never offers to replace or remove a verified device (no such endpoint).
  */
-export function MfaPanel({ onVerified, service, embedded = false, onBusyChange }: { onVerified: () => void; service: SetupAdapter; onBusyChange?: (busy: boolean) => void; preview?: boolean; /** Inside the setup step card, which already shows the title and reason: drop the repeated icon, title and intro. */ embedded?: boolean }) {
+export function MfaPanel({ onVerified, service, embedded = false, signIn = false, onBusyChange }: { onVerified: () => void; service: SetupAdapter; onBusyChange?: (busy: boolean) => void; preview?: boolean; /** Inside the setup step card, which already shows the title and reason: drop the repeated icon, title and intro. */ embedded?: boolean; signIn?: boolean }) {
   const [factors, setFactors] = useState<MfaFactor[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
@@ -100,10 +100,10 @@ export function MfaPanel({ onVerified, service, embedded = false, onBusyChange }
 
   const codeField = (id: string, factorId: string) => (
     <div className="mt-4 max-w-[320px]">
-      <CodeBoxes id={id} label="Six-digit code from your app" hint="Six digits. It changes every 30 seconds." value={code}
+      <CodeBoxes id={id} label="6-digit code" hint={signIn ? "" : "Use the current code from your authenticator app."} value={code}
         onChange={(value) => { setCode(value); setError(null); }} onComplete={(value) => void verify(factorId, value)} disabled={busy !== null} error={error} />
       <button type="button" disabled={!codeOk || busy !== null} onClick={() => void verify(factorId)} className={`${BTN} ap-btn-p mt-3 text-white! ${FOCUS}`}>
-        {busy === "verify" ? "Checking..." : "Verify code"}
+        {busy === "verify" ? "Checking..." : signIn ? "Continue" : "Verify code"}
       </button>
     </div>
   );
@@ -163,13 +163,18 @@ export function MfaPanel({ onVerified, service, embedded = false, onBusyChange }
               {busy === "cancel" ? "Cancelling..." : "Cancel this setup"}
             </button>
           </div>
+        ) : verified && signIn ? (
+          // Sign-in: just the six boxes on the page, no inner card (lead 2026-11-21).
+          <div className="mt-2">{codeField("adm-mfa-code-existing", verified.id)}</div>
         ) : verified ? (
-          <div className="mt-4 rounded-2xl border border-(--ap-line) p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <b className="text-[15px]">{verified.name ?? "Authenticator app"}</b>
-              <span className={CHIP.ok}>Device already added</span>
-            </div>
-            <p className="ap-bd mt-1.5">This account already has an authenticator. Enter a current code to confirm this sign-in. A new device is never added silently; ask Beeliv if you lost your device.</p>
+          <div className="mt-2 rounded-xl border border-(--ap-line) bg-(--ap-surface) p-4">
+            {!signIn ? <>
+              <div className="flex flex-wrap items-center gap-2">
+                <b className="text-[15px]">{verified.name ?? "Authenticator app"}</b>
+                <span className={CHIP.ok}>Device already added</span>
+              </div>
+              <p className="ap-bd mt-1.5">Enter the current code from your authenticator app. Contact Beeliv if you have lost access to it.</p>
+            </> : null}
             {codeField("adm-mfa-code-existing", verified.id)}
           </div>
         ) : pending ? (
