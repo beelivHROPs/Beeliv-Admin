@@ -50,8 +50,7 @@ export default async function AdminBusinessLayout({ children }: LayoutProps<"/">
         <TeamAccessModeProvider config={teamAccessConfig()}>
           {identity ? <AdminLiveIdentity id={identity.id} profile={identity.profile} /> : null}
           <AdminShell>
-            <SampleDataBanner on={!sampleDataOn()} />
-            {children}
+            <SampleDataBanner on={!sampleDataOn()}>{children}</SampleDataBanner>
           </AdminShell>
         </TeamAccessModeProvider>
       </OrgRecordsModeProvider>
