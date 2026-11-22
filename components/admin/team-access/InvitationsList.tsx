@@ -15,7 +15,7 @@
 import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { playAdminSound } from "@/lib/admin/sound";
 import { useEffect, useState } from "react";
-import { ANY, BODY_ROW, CARD_ITEM, CARD_LIST, EMPTY_CARD, HEAD_ROW, ListCard, ListToolbar, TABLE_CARD, TH, useBatch } from "@/components/admin/listKit";
+import { ANY, EMPTY_CARD, ListCard, ListToolbar, useBatch } from "@/components/admin/listKit";
 import { Restricted } from "@/components/admin/offers/parts";
 import { CancelButton, FIELD_LABEL, PrimaryButton, ReasonSheet, SheetFrame } from "@/components/admin/offers/Sheet";
 import { RowMenu } from "@/components/admin/overview/RowMenu";
@@ -23,16 +23,14 @@ import { ShowMore } from "@/components/admin/ShowMore";
 import { confirmAction } from "@/components/applicant/ConfirmDialog";
 import { Mail, Search, X } from "@/components/applicant/icons";
 import { EmptyState } from "@/components/applicant/primitives";
-import { StatusChip } from "@/components/client/StatusChip";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
-import { invitationCreator, invitationTiming, invitationDeliveryNote } from "@/lib/admin/team-access/invitation-presentation";
+import { invitationTiming } from "@/lib/admin/team-access/invitation-presentation";
 import { AccessLinkSheet } from "./AccessLinkSheet";
 import { InvitationDetailsSheet } from "./InvitationDetailsSheet";
 import { getInvitationDetails, createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
 import type { AccessLink, Invitation, InvitationKind, InvitationStatus, TeamCapabilities } from "@/lib/admin/team-access/types";
-import { DELIVERY_LABEL, DELIVERY_TONE, INVITE_LABEL, INVITE_ORDER, INVITE_TONE, KIND_LABEL, TEAM_HREF } from "./meta";
+import { INVITE_LABEL, INVITE_ORDER, KIND_LABEL, TEAM_HREF } from "./meta";
 
-const COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_190px]";
 const MANAGE_TAB: Record<InvitationKind, string> = { internal: "internal", client: "clients", staff: "accounts" };
 
 /** Re-renders once a second while a cooldown is running, so Resend enables itself at retryAt. */
@@ -48,12 +46,26 @@ function useNow(active: boolean) {
 const LINK_UNKNOWN = "We could not confirm the link was created. Reload this page, then create a new link.";
 const wait = (ms: number) => (ms >= 60_000 ? `${Math.ceil(ms / 60_000)} min` : `${Math.max(1, Math.ceil(ms / 1000))} s`);
 
+/** Redesign helpers (lead 2026-11-22). Status names stay the approved ones (Pending / Accepted / Expired / Revoked). */
+const GROUPS: [InvitationStatus, string][] = [["pending", "Pending"], ["expired", "Expired"], ["accepted", "Accepted"], ["revoked", "Revoked"]];
+const DOT: Record<InvitationStatus, string> = { pending: "#e3b341", accepted: "#3fb27f", expired: "#9a8a92", revoked: "#c4566f" };
+const TAG: Record<InvitationKind, string> = {
+  client: "bg-[rgba(63,178,127,.16)] text-[#1e7a52] dark:text-[#6fd3a4] [html[data-admin-theme=dark]_&]:text-[#6fd3a4]",
+  internal: "bg-[rgba(120,140,255,.16)] text-[#3a4bc4] [html[data-admin-theme=dark]_&]:text-[#a9b6ff]",
+  staff: "bg-[rgba(227,179,65,.18)] text-[#8a6510] [html[data-admin-theme=dark]_&]:text-[#f0c766]",
+};
+function initials(v: string): string {
+  const parts = v.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+
 export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; onNotice: (n: { kind: "ok" | "error"; text: string }) => void }) {
   const liveMode = teamAccessMode() === "live";
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InvitationStatus | "all">("all");
   const [kind, setKind] = useState<InvitationKind | "">("");
-  const live = useInvitations({ search, status: status === "all" ? "" : status, kind });
+  // Load once (search / type only) and filter the status tab on screen, so switching tabs is instant (lead 2026-11-22).
+  const live = useInvitations({ search, status: "", kind });
   const [last, setLast] = useState<typeof live.data>(null);
   if (live.data && live.data !== last) setLast(live.data);
   const page = live.data ?? last;
@@ -287,29 +299,22 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
         if (!liveMode || i.actions?.revoke === true) menu.push(revokeItem);
       }
     }
+    // Redesign (lead 2026-11-22): the row opens the details; "View details" stays first in the menu for keyboards.
+    const items = [{ label: "View details", onSelect: () => setDetails(i) }, ...menu];
     return (
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" className={btn} disabled={busy} onClick={() => setDetails(i)}>View details</button>
+      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
         {primary}
-        {menu.length ? <RowMenu label={`More actions for the invitation to ${i.name}`} items={menu} /> : null}
+        <RowMenu label={`More actions for the invitation to ${i.name}`} items={items} />
       </div>
     );
   };
   const dates = invitationTiming;
-  const deliveryCell = (i: Invitation) => (
-    <div className="min-w-0">
-      <StatusChip tone={DELIVERY_TONE[i.delivery.status]}>{DELIVERY_LABEL[i.delivery.status]}</StatusChip>
-      <span className="mt-1 block truncate text-[12px] leading-snug text-(--ap-muted)" title={i.delivery.failureReason ?? undefined}>
-        {invitationDeliveryNote(i)}
-        {i.delivery.failureReason ? `. ${i.delivery.failureReason}` : ""}
-      </span>
-    </div>
-  );
-  const shown = page.rows.slice(0, limit);
+  const tabRows = status === "all" ? page.rows : page.rows.filter((r) => r.status === status);
+  const shown = tabRows.slice(0, limit);
 
   return (
     <div>
-      <ListCard flat title="Invitations" summary={`${page.total} ${page.total === 1 ? "invitation" : "invitations"}${narrowed ? " match your filters" : ""}`}>
+      <ListCard flat title="Invitations" summary={`${tabRows.length} ${tabRows.length === 1 ? "invitation" : "invitations"}${narrowed ? " match your filters" : ""}`}>
       <ListToolbar
         tabsLabel="Filter invitations by status"
         tabs={INVITE_ORDER.map((st) => ({ key: st, label: st === "all" ? "All" : INVITE_LABEL[st], count: page.statusCounts[st] }))}
@@ -320,7 +325,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
         sort={null}
       />
       <div className={`@container transition-opacity ${live.status === "loading" ? "opacity-60" : ""}`}>
-        {page.total === 0 ? (
+        {tabRows.length === 0 ? (
           <div className="py-6">
             <EmptyState
               icon={Search}
@@ -337,60 +342,62 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
           </div>
         ) : (
           <>
-            <div role="table" aria-label="Invitations" className={`${TABLE_CARD} ad-dtable hidden rounded-xl border border-(--ap-line) bg-(--ap-surface) @min-[1000px]:block`}>
-              <div role="row" className={`grid ${COLS} items-end gap-x-4 ${HEAD_ROW}`}>
-                <span role="columnheader" className={TH}>Invitee</span>
-                <span role="columnheader" className={TH}>Role / scope</span>
-                <span role="columnheader" className={TH}>Invitation</span>
-                <span role="columnheader" className={TH}>Delivery</span>
-                <span role="columnheader" className={TH}>Actions</span>
-              </div>
-              {shown.map((i) => (
-                <div key={i.id} role="row" className={`grid ${COLS} items-center gap-x-4 ${BODY_ROW} min-h-[68px]`}>
-                  <div role="cell" className="min-w-0 leading-tight">
-                    <span className="block truncate text-[15px] font-bold" title={i.name}>{i.name}</span>
-                    <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={i.email}>{i.email}</span>
-                  </div>
-                  <div role="cell" className="min-w-0 leading-tight">
-                    <span className="block truncate text-[14px] text-(--ap-ink-2)" title={i.roleLabel}>{i.roleLabel}{i.jobTitle ? ` · ${i.jobTitle}` : ""}</span>
-                    <span className="mt-0.5 block truncate text-[12px] text-(--ap-muted)" title={i.scopeLabel}>{KIND_LABEL[i.kind]} · {i.scopeLabel}</span>
-                  </div>
-                  <div role="cell" className="min-w-0">
-                    <StatusChip tone={INVITE_TONE[i.status]}>{INVITE_LABEL[i.status]}</StatusChip>
-                    <span className="mt-1 block truncate text-[12px] text-(--ap-muted)">{dates(i)}{i.resendCount ? `, resent ${i.resendCount}x` : ""}</span>
-                    <span className="mt-1 block text-[12px] text-(--ap-muted)">{invitationCreator(i)}</span>
-                  </div>
-                  <div role="cell" className="min-w-0">{deliveryCell(i)}</div>
-                  <div role="cell">{actionsFor(i)}</div>
-                </div>
-              ))}
+            {/* Redesign (lead 2026-11-22): grouped by status, two-line rows, role tag, status dot, one action + menu.
+                The row opens the details. Everything the old table showed is in the row or the details panel. */}
+            <div className="flex flex-col gap-4">
+              {GROUPS.map(([st, title]) => {
+                const rows = shown.filter((i) => i.status === st);
+                if (!rows.length) return null;
+                return (
+                  <section key={st} aria-label={`${title} invitations`} className="overflow-hidden rounded-[20px] border border-(--ap-line) bg-(--ap-surface)">
+                    <h3 className="m-0 px-5 pt-3.5 pb-1.5 text-[12px] font-bold tracking-[0.08em] text-(--ap-muted) uppercase">{title} · {rows.length}</h3>
+                    <ul className="m-0 list-none p-0">
+                      {rows.map((i) => {
+                        const who = i.name && i.name !== i.email ? i.name : i.email;
+                        const soon = i.status === "pending" && i.expiresAt && Date.parse(i.expiresAt) - now < 2 * 86_400_000;
+                        return (
+                          <li key={i.id} className="border-t border-(--ap-line) first:border-t-0">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setDetails(i)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetails(i); } }}
+                              aria-label={`Open the invitation to ${who}`}
+                              className="group flex cursor-pointer items-center gap-4 px-5 py-3.5 hover:bg-(--ap-tint-soft) focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--ap-violet) max-[767px]:flex-wrap max-[767px]:gap-3 max-[767px]:px-4"
+                            >
+                              <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-(--ap-tint) text-[14px] font-bold text-(--ap-violet)">{initials(who)}</span>
+                              <div className="min-w-0 flex-1 leading-tight">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <b className="truncate text-[16px]" title={i.email}>{who}</b>
+                                  <span className={`inline-flex h-[22px] shrink-0 items-center rounded-full px-2.5 text-[12px] font-bold ${TAG[i.kind]}`}>{KIND_LABEL[i.kind]}</span>
+                                </span>
+                                <span className="mt-1 block truncate text-[14px] text-(--ap-muted)" title={`${i.roleLabel} · ${i.scopeLabel}`}>
+                                  {i.kind === "internal" ? `${i.roleLabel} · ` : ""}{i.scopeLabel} · <span className={soon ? "font-bold text-(--ap-warn)" : ""}>{dates(i)}</span>
+                                </span>
+                                {i.delivery.status === "failed" ? <span className="mt-1 block text-[13px] font-semibold text-(--ap-rose)">Email not delivered{i.delivery.failureReason ? `: ${i.delivery.failureReason}` : ""}</span> : null}
+                              </div>
+                              <span className="flex min-w-[120px] items-center gap-2 text-[14px] text-(--ap-ink-2) max-[767px]:min-w-0">
+                                <span aria-hidden="true" className="size-2 rounded-full" style={{ background: DOT[i.status] }} />
+                                {INVITE_LABEL[i.status]}
+                              </span>
+                              <div className="max-[767px]:w-full">{actionsFor(i)}</div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                );
+              })}
             </div>
-            <ul className={`${CARD_LIST} ad-dtable min-[768px]:rounded-xl min-[768px]:border min-[768px]:border-(--ap-line) min-[768px]:bg-(--ap-surface) min-[768px]:px-4 @min-[1000px]:hidden`}>
-              {shown.map((i) => (
-                <li key={i.id} className={CARD_ITEM}>
-                  <div className="min-w-0 leading-tight">
-                    <span className="block truncate text-[15px] font-bold">{i.name}</span>
-                    <span className="block truncate text-[13px] text-(--ap-muted)" title={i.email}>{i.email}</span>
-                  </div>
-                  <p className="mt-1.5 truncate text-[13px] text-(--ap-muted)" title={`${i.roleLabel}, ${i.scopeLabel}`}><b className="text-(--ap-ink-2)">{KIND_LABEL[i.kind]}</b> · {i.roleLabel}{i.jobTitle ? ` · ${i.jobTitle}` : ""} · {i.scopeLabel}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <StatusChip tone={INVITE_TONE[i.status]}>{INVITE_LABEL[i.status]}</StatusChip>
-                    <span className="text-[12px] text-(--ap-muted)">{dates(i)}</span>
-                    <span className="text-[12px] text-(--ap-muted)">{invitationCreator(i)}</span>
-                  </div>
-                  <div className="mt-2">{deliveryCell(i)}</div>
-                  <div className="mt-2.5">{actionsFor(i)}</div>
-                </li>
-              ))}
-            </ul>
           </>
         )}
       </div>
-      <ShowMore shown={limit} total={page.total} onMore={more} onClear={narrowed ? clear : null} />
+      <ShowMore shown={limit} total={tabRows.length} onMore={more} onClear={narrowed ? clear : null} />
       <p className="mt-3 text-[13px] text-(--ap-muted)">{liveMode ? "Create an invitation, then choose email delivery or an access link. Queued email is not confirmation of delivery." : "Invitations are never sent automatically. Email delivery is connected later, so sending is recorded only."}</p>
       </ListCard>
 
-      {details ? <InvitationDetailsSheet key={`${details.id}:${details.revision}`} invitation={details} onClose={() => setDetails(null)} /> : null}
+      {details ? <InvitationDetailsSheet key={`${details.id}:${details.revision}`} invitation={details} onClose={() => setDetails(null)} actions={actionsFor(details)} /> : null}
       {shownLink ? <AccessLinkSheet name={shownLink.name} link={shownLink.link} onClose={() => setShownLink(null)} /> : null}
       {editing ? <EmailSheet inv={editing} busy={busy} error={err} onCancel={() => setEditing(null)} onSubmit={saveEmail} /> : null}
       {revoking ? (
