@@ -8,7 +8,9 @@
  * (Copy link, Open in my email app). Existing clients are not imported: they
  * receive a link and onboard themselves. Nothing is emailed.
  */
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { createClient, createOutlet } from "@/lib/admin/org-records/writes";
+import { orgErrorMessage } from "@/lib/admin/org-records/transport";
 import { NeedsConfirmation } from "@/components/admin/offers/parts";
 import { CancelButton, FIELD_LABEL, PrimaryButton, SheetFrame } from "@/components/admin/offers/Sheet";
 import { Plus, Trash2 } from "@/components/applicant/icons";
@@ -20,8 +22,17 @@ import { Checkbox, InviteLinkResult } from "./InviteParts";
 
 type OutletDraft = { name: string; address: string; city: string };
 const STEP_TITLE = ["Business details", "Outlets", "Who to invite", "Review"];
+/** Live: the same business types as the live Add client form (OrgSheets). */
+const LIVE_BUSINESS_TYPES = ["Restaurant", "Hotel", "Lounge or bar", "Cafe", "Event centre", "Catering business"];
+/** Live invitations expire after 7 days (lead decision 2026-10-13). */
+const LIVE_EXPIRY_DAYS = 7;
 
-export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; onClose: () => void; onDone?: (inv: Invitation) => void }) {
+/**
+ * live: the REAL backend. One guided flow (lead 2026-11-21: "merge together and made simple"): create the client, then
+ * each outlet, then the invitation. Three guarded writes, never a pretend transaction: what is already saved is kept,
+ * so "Try again" only finishes the remaining steps and never creates the client or an outlet twice.
+ */
+export function ClientWizard({ facets, onClose, onDone, live = false, onUseExisting }: { facets: TeamFacets; onClose: () => void; onDone?: (inv: Invitation) => void; live?: boolean; onUseExisting?: () => void }) {
   const uid = useId();
   const [step, setStep] = useState(0);
   const [bName, setBName] = useState("");
@@ -31,7 +42,11 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
   const [outlets, setOutlets] = useState<OutletDraft[]>([{ name: "", address: "", city: "" }]);
   const [cName, setCName] = useState("");
   const [cEmail, setCEmail] = useState("");
-  const [levelId, setLevelId] = useState("");
+  const [levelId, setLevelId] = useState(live ? (facets.accessLevels[0]?.id ?? "") : "");
+  const savedClient = useRef<string | null>(null);
+  const [partial, setPartial] = useState(false); // the client is saved; a retry only finishes the rest
+  const savedOutlets = useRef<(string | null)[]>([]);
+  const types = live ? LIVE_BUSINESS_TYPES.map((t) => ({ id: t, name: t })) : facets.clientTypes;
   const [access, setAccess] = useState<number[]>([0]);
   const [days, setDays] = useState(String(facets.expiryOptions[1]?.days ?? facets.expiryOptions[0]?.days ?? 7));
   const [busy, setBusy] = useState(false);
@@ -46,7 +61,43 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
     setOutlets(outlets.filter((_, j) => j !== i));
     setAccess(access.filter((x) => x !== i).map((x) => (x > i ? x - 1 : x)));
   };
-  const typeName = facets.clientTypes.find((t) => t.id === typeId)?.name ?? "";
+  const typeName = types.find((t) => t.id === typeId)?.name ?? "";
+
+  async function submitLive() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (!savedClient.current) {
+        savedClient.current = (await createClient({ name: bName, businessType: typeName, city: bCity, address: bAddr })).clientId;
+        setPartial(true);
+      }
+      const clientId = savedClient.current;
+      for (let i = 0; i < outlets.length; i++) {
+        if (savedOutlets.current[i]) continue;
+        const o = outlets[i];
+        savedOutlets.current[i] = (await createOutlet(clientId, { name: o.name, address: o.address, city: o.city, phone: "", manager: "", notes: "" })).outletId;
+      }
+      const inv = await inviteUser({
+        kind: "client",
+        name: cName,
+        email: cEmail,
+        accessLevelId: levelId,
+        clientId,
+        outletIds: access.map((i) => savedOutlets.current[i]).filter((x): x is string => !!x),
+        allClients: false,
+        scopeClientIds: [],
+        expiresInDays: LIVE_EXPIRY_DAYS,
+      });
+      setSent(inv);
+      playAdminSound("saved");
+      onDone?.(inv);
+    } catch (e) {
+      const why = e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation." : orgErrorMessage(e, "We couldn't confirm this step.");
+      setError(savedClient.current ? `${bName} is saved. ${why} Press "Try again" to finish the rest; nothing will be created twice.` : `${why} Nothing was saved. Please try again.`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit() {
     setBusy(true);
@@ -96,8 +147,8 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
               Next
             </PrimaryButton>
           ) : (
-            <PrimaryButton disabled={busy} onClick={submit}>
-              {busy ? "Working..." : "Create client and invitation"}
+            <PrimaryButton disabled={busy} onClick={live ? submitLive : submit}>
+              {busy ? "Working..." : error && partial ? "Try again" : "Create client and invitation"}
             </PrimaryButton>
           )}
         </>
@@ -110,7 +161,7 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
           </label>
           <input id={`${uid}-bn`} className="ap-input mt-1.5" value={bName} maxLength={100} onChange={(e) => setBName(e.target.value)} />
           <span className={FIELD_LABEL}>Business type</span>
-          <SelectMenu label="Business type" value={typeId} placeholder="Choose a type" onChange={setTypeId} options={facets.clientTypes.map((t) => ({ value: t.id, label: t.name }))} className="mt-1.5" />
+          <SelectMenu label="Business type" value={typeId} placeholder="Choose a type" onChange={setTypeId} options={types.map((t) => ({ value: t.id, label: t.name }))} className="mt-1.5" />
           <label htmlFor={`${uid}-bc`} className={FIELD_LABEL}>
             City
           </label>
@@ -119,6 +170,11 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
             Head office address (optional)
           </label>
           <input id={`${uid}-ba`} className="ap-input mt-1.5" value={bAddr} maxLength={160} onChange={(e) => setBAddr(e.target.value)} />
+          {onUseExisting ? (
+            <button type="button" onClick={onUseExisting} className="mt-4 text-[14px] font-semibold text-(--ap-violet) underline underline-offset-4">
+              Business already added? Invite someone to it instead
+            </button>
+          ) : null}
         </>
       ) : null}
 
@@ -159,8 +215,8 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
           </label>
           <input id={`${uid}-ce`} type="email" className="ap-input mt-1.5" value={cEmail} maxLength={120} onChange={(e) => setCEmail(e.target.value)} aria-invalid={!!cEmail && !emailOk} />
           {cEmail && !emailOk ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Enter a valid email address.</p> : null}
-          <span className={FIELD_LABEL}>Access level</span>
-          <SelectMenu label="Access level" value={levelId} placeholder="Choose an access level" onChange={setLevelId} options={facets.accessLevels.map((l) => ({ value: l.id, label: l.name }))} className="mt-1.5" />
+          {live && facets.accessLevels.length <= 1 ? null : <span className={FIELD_LABEL}>Access level</span>}
+          {live && facets.accessLevels.length <= 1 ? null : <SelectMenu label="Access level" value={levelId} placeholder="Choose an access level" onChange={setLevelId} options={facets.accessLevels.map((l) => ({ value: l.id, label: l.name }))} className="mt-1.5" />}
           <span className={FIELD_LABEL}>Outlets this person can see</span>
           <div className="mt-1.5 flex flex-col gap-2">
             {outlets.map((o, i) => (
@@ -169,11 +225,17 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
               </Checkbox>
             ))}
           </div>
-          <span className={FIELD_LABEL}>Invitation expires after</span>
-          <SelectMenu label="Invitation expiry" value={days} onChange={setDays} options={facets.expiryOptions.map((o) => ({ value: String(o.days), label: o.label }))} className="mt-1.5" />
-          <div className="mt-3">
-            <NeedsConfirmation>What each client access level may do.</NeedsConfirmation>
-          </div>
+          {live ? (
+            <p className="mt-3 text-[13px] text-(--ap-muted)">The invitation link works for 7 days.</p>
+          ) : (
+            <>
+              <span className={FIELD_LABEL}>Invitation expires after</span>
+              <SelectMenu label="Invitation expiry" value={days} onChange={setDays} options={facets.expiryOptions.map((o) => ({ value: String(o.days), label: o.label }))} className="mt-1.5" />
+              <div className="mt-3">
+                <NeedsConfirmation>What each client access level may do.</NeedsConfirmation>
+              </div>
+            </>
+          )}
         </>
       ) : null}
 
@@ -199,10 +261,14 @@ export function ClientWizard({ facets, onClose, onDone }: { facets: TeamFacets; 
             <b className="block text-(--ap-ink)">{cName}</b>
             {cEmail}
             <span className="block">
-              {facets.accessLevels.find((l) => l.id === levelId)?.name} · sees {access.map((i) => outlets[i]?.name || `Outlet ${i + 1}`).join(", ")}
+              {live ? "Client access" : facets.accessLevels.find((l) => l.id === levelId)?.name} · sees {access.map((i) => outlets[i]?.name || `Outlet ${i + 1}`).join(", ")}
             </span>
           </div>
-          <p className="text-[13px] text-(--ap-muted)">Creating this adds the client and its outlets and an invitation that is NOT sent yet. On the next screen you choose Send invitation, or copy the link. Email delivery is connected later; nothing is emailed.</p>
+          <p className="text-[13px] text-(--ap-muted)">
+            {live
+              ? "This adds the client and its outlets, then creates the invitation. On the next screen, copy the link or send it by email."
+              : "Creating this adds the client and its outlets and an invitation that is NOT sent yet. On the next screen you choose Send invitation, or copy the link. Email delivery is connected later; nothing is emailed."}
+          </p>
           {error ? (
             <p role="alert" className="text-[14px] font-semibold text-(--ap-rose)">
               {error}
