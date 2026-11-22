@@ -1,25 +1,22 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { isSampleAdminRoute } from "@/lib/admin/sample-routes";
+import { ComingSoonScreen } from "@/components/shared/ComingSoonScreen";
+import { HR_NAV_ITEMS, OPS_NAV_ITEMS } from "@/components/admin/nav";
 
 const VACANCIES_LIVE = process.env.NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED === "true";
 
 /**
- * Live deployments only (`on` is decided on the server: true when sample data is NOT allowed, i.e. production).
- * Labels every Admin page that still shows built-in sample data, so nobody mistakes it for real records.
- * Local previews are all sample data, so the banner stays off there and approved designs look unchanged.
+ * Live deployments (`on` is decided on the server: true when sample data is NOT allowed, i.e. production).
+ * Lead rule 2026-11-21: real users see REAL data or "Coming soon", never sample data. A page that is not connected to
+ * Beeliv records yet (lib/admin/sample-routes.ts) renders the Coming soon screen instead of its sample content.
+ * Local previews keep every approved screen with its sample data.
  */
-export function SampleDataBanner({ on }: { on: boolean }) {
+export function SampleDataBanner({ on, children }: { on: boolean; children?: ReactNode }) {
   const pathname = usePathname();
-  if (!on || !isSampleAdminRoute(pathname, VACANCIES_LIVE)) return null;
-  return (
-    <div
-      role="note"
-      className="mb-4 rounded-xl border px-4 py-3 text-[14px] leading-snug"
-      style={{ borderColor: "var(--ap-line-2)", background: "var(--ap-tint-soft)", color: "var(--ap-ink)" }}
-    >
-      <strong className="font-semibold">Preview.</strong> Sample data, nothing here is saved. This page is not connected to Beeliv records yet.
-    </div>
-  );
+  if (!on || !isSampleAdminRoute(pathname, VACANCIES_LIVE)) return <>{children}</>;
+  const item = [...HR_NAV_ITEMS, ...OPS_NAV_ITEMS].filter((n) => n.href !== "/admin" && n.href !== "/admin/ops" && (pathname === n.href || pathname.startsWith(`${n.href}/`))).sort((a, b) => b.href.length - a.href.length)[0];
+  return <ComingSoonScreen title={item?.label ?? "Coming soon"} />;
 }
