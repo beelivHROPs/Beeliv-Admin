@@ -228,7 +228,7 @@ function ApplicantTable({ rows, menuFor }: { rows: ApplicantRow[]; menuFor: (r: 
           <div role="cell" className="min-w-0 leading-tight">
             <b className="block text-[14px] [overflow-wrap:anywhere]">{r.vacancy}</b>
             <span className="mt-0.5 block text-[13px] leading-snug [overflow-wrap:anywhere] text-(--ap-muted)">
-              {r.client}, {r.outlet}
+              {[r.client, r.outlet].filter(Boolean).join(", ")}
             </span>
           </div>
           <div role="cell" className="min-w-0">
@@ -283,7 +283,7 @@ function ApplicantCards({ rows, menuFor }: { rows: ApplicantRow[]; menuFor: (r: 
                 </Link>
                 {r.needsAttention ? <span aria-label="Needs attention" className="size-2 shrink-0 rounded-full bg-(--ap-rose)" /> : null}
               </div>
-              <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={`${r.vacancy} · ${r.client}, ${r.outlet}`}>
+              <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={`${r.vacancy} · ${[r.client, r.outlet].filter(Boolean).join(", ")}`}>
                 {r.vacancy} · {r.nextAction ?? `Applied ${formatDateTime(r.appliedAt)}`}
               </span>
             </div>

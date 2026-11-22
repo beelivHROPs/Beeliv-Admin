@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RestrictedError } from "../adapter";
 import type { LoadStatus } from "../types";
 import * as service from "./service";
+import { liveApplicantsAdapter } from "./live";
+import { useAuthLive } from "@/lib/ui/auth-live";
 import type { ApplicantDetail, ApplicantsPage, ApplicantsQuery } from "./types";
 
 type Result<T> = { key: string; data: T | null; failed: "error" | "restricted" | null };
@@ -46,12 +48,15 @@ function useLoad<T>(load: () => Promise<T | null>, deps: string): Live<T> {
   return { data: result.data, status: result.data === null ? "empty" : "ready", retry, setData };
 }
 
+/** Live deployments read REAL applications (lib/admin/applicants/live.ts); the sample fixture is preview-only. */
 export function useApplicantsList(q: ApplicantsQuery): Live<ApplicantsPage> {
-  return useLoad(() => service.listApplicants(q), JSON.stringify(q));
+  const live = useAuthLive();
+  return useLoad(() => (live ? liveApplicantsAdapter.listApplicants(q) : service.listApplicants(q)), `${live}:${JSON.stringify(q)}`);
 }
 
 export function useApplicant(id: string): Live<ApplicantDetail> {
-  return useLoad(() => service.getApplicant(id), id);
+  const live = useAuthLive();
+  return useLoad(() => (live ? liveApplicantsAdapter.getApplicant(id) : service.getApplicant(id)), `${live}:${id}`);
 }
 
 export const performApplicantAction = service.performAction;

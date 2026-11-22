@@ -61,7 +61,7 @@ export function OverviewPanel({ a }: { a: ApplicantDetail }) {
               label: "Expected salary",
               value: a.expectedSalary.allowed ? a.expectedSalary.value : <span className="text-(--ap-muted)">Not shown for your access level</span>,
             },
-            { label: "Current vacancy", value: `${a.vacancy}, ${a.client} (${a.outlet})`, phoneOnly: true },
+            { label: "Current vacancy", value: `${a.vacancy}, ${a.client}${a.outlet ? ` (${a.outlet})` : ""}`, phoneOnly: true },
             { label: "Assigned recruiter", value: a.recruiter?.name ?? "Unassigned", phoneOnly: true },
           ]}
         />
@@ -113,7 +113,7 @@ export function ApplicationPanel({ a }: { a: ApplicantDetail }) {
       <Facts
         items={[
           { label: "Vacancy", value: a.vacancy },
-          { label: "Client / outlet", value: `${a.client}, ${a.outlet}` },
+          { label: "Client / outlet", value: [a.client, a.outlet].filter(Boolean).join(", ") },
           { label: "Application date", value: formatDate(a.appliedAt) },
           { label: "Stage", value: <StageChip row={a} /> },
           { label: "Application reference", value: a.applicationRef },
