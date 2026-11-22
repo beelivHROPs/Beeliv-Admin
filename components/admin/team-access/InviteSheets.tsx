@@ -14,6 +14,8 @@
  * Reused: SheetFrame (Offers), SelectMenu, Disc.
  */
 import { teamAccessMode } from "@/lib/admin/team-access/mode";
+import { orgRecordsWritesAvailable } from "@/lib/admin/org-records/mode";
+import { useCan } from "@/lib/admin/role-access";
 import { LiveStaffInvite } from "./LiveStaffInvite";
 import { playAdminSound } from "@/lib/admin/sound";
 import { useId, useState } from "react";
@@ -51,7 +53,12 @@ function InviteChoices({ kind, prefill, onClose, onDone }: InviteSheetProps) {
   const [kept, setKept] = useState<TeamFacets | undefined>(live ?? undefined);
   if (live && live !== kept) setKept(live);
   const facets = live ?? kept;
-  if (!liveMode && kind === "client" && !prefill?.clientId && facets) return <ClientWizard facets={facets} onClose={onClose} onDone={onDone} />;
+  // Live: people who may add clients get the one-step wizard (new business + outlets + person). "Business already
+  // added?" switches to the existing-client form below. Others (e.g. HR officers) only invite to an existing client.
+  const canCreateClient = useCan("clients.create") && orgRecordsWritesAvailable();
+  const [existingClient, setExistingClient] = useState(false);
+  if (kind === "client" && !prefill?.clientId && facets && (!liveMode || (canCreateClient && !existingClient)))
+    return <ClientWizard facets={facets} onClose={onClose} onDone={onDone} live={liveMode} onUseExisting={liveMode ? () => setExistingClient(true) : undefined} />;
   if (kind === "staff" && facets) return <StaffWizard facets={facets} prefill={prefill} onClose={onClose} onDone={onDone} />;
   return (
     <SheetFrame
