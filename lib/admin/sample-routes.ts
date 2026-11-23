@@ -10,6 +10,8 @@
 const REAL_PREFIXES = [
   "/admin/people", // Live People: real Applicants (submitted applications) and the real Staff directory only.
   "/admin/recruitment/applicants", // Applicant 360 on a real submitted application (lib/admin/applicants/live.ts)
+  "/admin/workforce/scheduling", // weekly rosters (workforce-shifts-attendance.sql, lib/admin/workforce/live.ts)
+  "/admin/workforce/attendance", // check-ins against published shifts
   "/admin/staff", // directory, assignments, documents (org records + staff documentation, live)
   "/admin/team-access", // team and access, invitations (auth backend, live)
   "/admin/ops/clients", // Operations clients and outlets (org records, live)

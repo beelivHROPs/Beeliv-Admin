@@ -4,8 +4,12 @@
  */
 import type { WorkforceAdapter } from "./adapter";
 import { mockWorkforceAdapter } from "./mock";
+import { liveWorkforceAdapter } from "./live";
+import { teamAccessMode } from "../team-access/mode";
 
-const adapter: WorkforceAdapter = mockWorkforceAdapter; // DEV FIXTURE until the backend adapter exists
+/** Live deployments use the real adapter (server-decided mode, same flag as Team & Access); sample data is preview-only. */
+const pick = (): WorkforceAdapter => (teamAccessMode() === "live" ? liveWorkforceAdapter : mockWorkforceAdapter);
+const adapter: WorkforceAdapter = new Proxy({} as WorkforceAdapter, { get: (_t, k) => (pick() as unknown as Record<string | symbol, unknown>)[k] });
 
 export const subscribeWorkforce: WorkforceAdapter["subscribe"] = (l) => adapter.subscribe(l);
 
