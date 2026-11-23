@@ -5,7 +5,7 @@ import { acceptInvitation, AuthFailure, enforceOrigin, getSession, previewInvita
 
 import { getSetup, updateSetup, SetupFailure } from "@/lib/server/auth/setup";
 import { adminMfa } from "@/lib/server/auth/mfa";
-import { manageInvitation, listInvitations, type ManagementAction } from "@/lib/server/auth/invitation-management";
+import { manageInvitation, listInvitations, listTeam, teamRoles, type ManagementAction } from "@/lib/server/auth/invitation-management";
 import { RateFailure } from "@/lib/server/auth/rate";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
   const supportRef = randomUUID();
   try {
     const { action } = await context.params;
-    if (!["invite-create-draft","invite-edit-draft","invite-review","invite-send","invite-resend","invite-revoke","invite-replace","invite-status","invite-copy-link","invite-list","sign-in", "sign-out", "session", "invite-preview", "invite-accept", "invite-reconcile", "setup", "setup-profile", "setup-agreement", "setup-finish", "mfa-status", "mfa-enroll", "mfa-verify", "mfa-cancel-enrollment"].includes(action)) return Response.json({ ok: false }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
+    if (!["invite-create-draft","invite-edit-draft","invite-review","invite-send","invite-resend","invite-revoke","invite-replace","invite-status","invite-copy-link","invite-list","team-list","team-roles","sign-in", "sign-out", "session", "invite-preview", "invite-accept", "invite-reconcile", "setup", "setup-profile", "setup-agreement", "setup-finish", "mfa-status", "mfa-enroll", "mfa-verify", "mfa-cancel-enrollment"].includes(action)) return Response.json({ ok: false }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
     const input = await readJson(request);
     if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthFailure("invalid_request");
     const app = requestedApp(input);
@@ -21,6 +21,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
     let output: unknown;
     if (["invite-create-draft","invite-edit-draft","invite-review","invite-send","invite-resend","invite-revoke","invite-replace","invite-status","invite-copy-link"].includes(action)) output = await manageInvitation(action as ManagementAction,input);
     else if (action === "invite-list") output = await listInvitations(input);
+    else if (action === "team-list") output = await listTeam(input);
+    else if (action === "team-roles") output = await teamRoles();
     else if (action === "setup") output = await getSetup(app);
     else if (action === "setup-profile" || action === "setup-agreement" || action === "setup-finish") output = await updateSetup(app, action, input);
     else if (action === "mfa-status" || action === "mfa-enroll" || action === "mfa-verify" || action === "mfa-cancel-enrollment") output = await adminMfa(action, input);

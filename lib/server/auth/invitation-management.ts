@@ -171,3 +171,36 @@ export async function listInvitations(input:Record<string,unknown>) {
  if(!list.ok||list.items.length>parsed.limit)throw new AuthFailure("unavailable",503);
  return list;
 }
+
+/* ---------- Team & Access lists (team-access-read.sql). Read-only; the database checks role and scope. ---------- */
+async function verifiedAdminActor() {
+  const client = await sessionClient("admin");
+  const { data: identity, error: identityError } = await client.auth.getUser();
+  const { data: proof, error: proofError } = await client.auth.getClaims();
+  const user = identity.user; const claims = proof?.claims;
+  if (identityError || !user?.email_confirmed_at || proofError || claims?.sub !== user.id || typeof claims.session_id !== "string" || !uuid.test(claims.session_id) || !uuid.test(user.id)) throw new AuthFailure("unauthenticated", 401);
+  if (claims.aal !== "aal2") throw new AuthFailure("mfa_required", 403);
+  await limitAuth("admin", "invite_manage_read", user.id);
+  return { uid: user.id, sessionId: claims.session_id as string };
+}
+function teamReply(data: Record<string, unknown> | null) {
+  if (data?.ok === false) { const r = String(data.reason); throw r === "invalid_request" ? new AuthFailure("invalid_request", 400) : r === "no_access" ? new AuthFailure("no_access", 403) : new AuthFailure("unavailable", 503); }
+  if (data?.ok !== true) throw new AuthFailure("unavailable", 503);
+  return data;
+}
+export async function listTeam(input: Record<string, unknown>) {
+  const kind = input.kind;
+  if (kind !== "internal" && kind !== "client" && kind !== "account") throw new AuthFailure("invalid_request", 400);
+  const who = await verifiedAdminActor();
+  const result = await adminClient("admin").rpc("auth_team_access_list", { p_actor_uid: who.uid, p_session_id: who.sessionId, p_kind: kind });
+  if (result.error) throw new AuthFailure("unavailable", 503);
+  const data = teamReply(record(result.data));
+  return { ok: true as const, items: Array.isArray(data.items) ? data.items : [], truncated: data.truncated === true };
+}
+export async function teamRoles() {
+  const who = await verifiedAdminActor();
+  const result = await adminClient("admin").rpc("auth_team_roles", { p_actor_uid: who.uid, p_session_id: who.sessionId });
+  if (result.error) throw new AuthFailure("unavailable", 503);
+  const data = teamReply(record(result.data));
+  return { ok: true as const, roles: Array.isArray(data.roles) ? data.roles : [] };
+}
