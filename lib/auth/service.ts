@@ -109,3 +109,15 @@ export async function listInvitations(input: Partial<InvitationListInput> = {}) 
  if (input.after) body.after = input.after;
  const result = await request("invite-list", body); return result.ok ? parseInvitationList(result.value) : result;
 }
+
+/** Team & Access lists (read-only). Raw items; lib/admin/team-access/live.ts maps them. */
+export async function listTeamWire(kind: "internal" | "client" | "account"): Promise<{ ok: true; items: unknown[] } | { ok: false; reason: string }> {
+  const result = await request("team-list", { portal: "admin", kind });
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, items: Array.isArray(result.value.items) ? result.value.items : [] };
+}
+export async function teamRolesWire(): Promise<{ ok: true; roles: unknown[] } | { ok: false; reason: string }> {
+  const result = await request("team-roles", { portal: "admin" });
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, roles: Array.isArray(result.value.roles) ? result.value.roles : [] };
+}

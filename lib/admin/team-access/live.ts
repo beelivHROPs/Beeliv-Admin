@@ -1,11 +1,11 @@
 /** Live invitations only. No fixture fallback, automatic write retry or browser-owned grants. */
-import { createInvitationAccessLink, listInvitations as listInvitationsWire, getSession, createInvitationDraft, editInvitationDraft, invitationAction, checkInvitationStatus } from "../../auth/service";
+import { createInvitationAccessLink, listInvitations as listInvitationsWire, getSession, createInvitationDraft, editInvitationDraft, invitationAction, checkInvitationStatus, listTeamWire, teamRolesWire } from "../../auth/service";
 import type { InvitationListItem, InvitationDraftInput, ManagedInvitation, ManagementResult } from "../../auth/invitation-management-wire";
 import type { AdapterEvent } from "../adapter";
 import { RestrictedError } from "../adapter";
 import { createIntentKeys, OutcomeUnknownError, orgCall } from "../org-records/transport";
 import type { TeamAccessAdapter } from "./adapter";
-import type { DeliveryStatus, Invitation, InvitationQuery, InvitationsPage, InvitationStatus, InviteInput, TeamFacets } from "./types";
+import type { AccessKind, AccessMatrix, AccessPage, AccessQuery, AccessRow, AccountStatus, CapabilityLevel, DeliveryStatus, Invitation, InvitationQuery, InvitationsPage, InvitationStatus, InviteInput, TeamFacets } from "./types";
 import type { ClientRowDto, ClientDetailDto, Page } from "../../server/org-records/types";
 
 export class TeamAccessNotConnectedError extends Error {
@@ -53,6 +53,71 @@ export function invitationDraft(input:InviteInput):InvitationDraftInput {
   if(jobTitle.length>60||/[\u0000-\u001f]/.test(jobTitle))throw new Error("invalid_request");
   return {kind:input.kind,email,role:role as InvitationDraftInput["role"],personId:input.kind==="staff"?input.personId!:null,scopes:scopes.sort((a,b)=>(a.clientId+":"+a.outletId).localeCompare(b.clientId+":"+b.outletId)),allClients:input.allClients,jobTitle};
 }
+/* ---------- Team & Access lists (team-access-read.sql): real people, filtered on screen ---------- */
+const STATUSES: AccountStatus[] = ["invited", "active", "suspended", "deactivated"];
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+function teamRow(kind: AccessKind, raw: unknown): AccessRow | null {
+  const r = rec(raw);
+  if (!r || !UUID.test(str(r.id))) return null;
+  const status = (STATUSES as string[]).includes(str(r.status)) ? (str(r.status) as AccountStatus) : "active";
+  const scopes = (Array.isArray(r.scopes) ? r.scopes : []).map(rec).filter((x): x is Record<string, unknown> => !!x);
+  const scopeText = scopes.map((x) => (str(x.outletName) ? `${str(x.clientName)}: ${str(x.outletName)}` : `${str(x.clientName)} (all outlets)`)).join(", ");
+  const ents = Array.isArray(r.entitlements) ? r.entitlements.map(str) : [];
+  const placement = rec(r.placement);
+  const roleLabel = kind === "internal" ? ROLE_LABEL[str(r.roleKey)] ?? "" : kind === "client" ? "Client access"
+    : ents.includes("applicant") && ents.includes("staff") ? "Applicant and staff" : ents.includes("staff") ? "Staff" : ents.includes("applicant") ? "Applicant" : "Invited";
+  const scopeLabel = kind === "internal" ? (r.allClients === true ? "All clients" : scopeText || "No clients assigned")
+    : kind === "client" ? scopeText || "No outlets assigned"
+    : placement ? `${str(placement.outletName)} (${str(placement.clientName)})${str(placement.role) ? ` · ${str(placement.role)}` : ""}` : "Not assigned";
+  return { id: str(r.id), kind, reference: str(r.reference), name: str(r.name) || str(r.email), email: str(r.email), status, roleLabel, scopeLabel, lastActiveAt: str(r.lastActiveAt) || null, ...(kind === "internal" ? { roleId: str(r.roleKey) } : {}) };
+}
+async function teamPage(kind: AccessKind, q: AccessQuery): Promise<AccessPage> {
+  const res = await listTeamWire(kind);
+  if (!res.ok) { if (res.reason === "no_access" || res.reason === "forbidden") throw new RestrictedError(); throw new Error("unavailable"); }
+  const all = res.items.map((x) => teamRow(kind, x)).filter((x): x is AccessRow => !!x);
+  const term = q.search.trim().toLowerCase();
+  const facet = (row: AccessRow) => !q.facet || (kind === "internal" ? row.roleId === q.facet : kind === "account" ? (q.facet === "both" ? row.roleLabel === "Applicant and staff" : row.roleLabel.toLowerCase() === q.facet) : true);
+  const matched = all.filter((row) => (!term || [row.name, row.email, row.roleLabel, row.scopeLabel].some((v) => v.toLowerCase().includes(term))) && facet(row));
+  const statusCounts = { all: matched.length, invited: 0, active: 0, suspended: 0, deactivated: 0 } as AccessPage["statusCounts"];
+  for (const row of matched) statusCounts[row.status]++;
+  const rows = q.status ? matched.filter((row) => row.status === q.status) : matched;
+  return { rows, total: rows.length, statusCounts, workspaceEmpty: all.length === 0 };
+}
+/** Roles and access: the REAL roles and what each may do (auth_role_permissions), in plain words. */
+const ROLE_ORDER = ["head_of_operations", "hr_manager", "hr_officer"];
+const ROLE_SUMMARY: Record<string, string> = { head_of_operations: "Final approvals, every client, team and access.", hr_manager: "Recruitment, staff and clients; invites people.", hr_officer: "Day-to-day view of jobs, applicants, clients and staff." };
+const CAPABILITY_ROWS: { key: string; label: string; perms: string[] }[] = [
+  { key: "jobs-read", label: "See jobs and applications", perms: ["vacancy.read", "application.read"] },
+  { key: "jobs-write", label: "Create and edit jobs", perms: ["vacancy.create", "vacancy.edit"] },
+  { key: "jobs-publish", label: "Publish, pause and close jobs", perms: ["vacancy.publish", "vacancy.close"] },
+  { key: "apps", label: "Shortlist, hold and reject applications", perms: ["application.manage"] },
+  { key: "clients", label: "Add and edit clients and outlets", perms: ["org.client.write", "org.outlet.write"] },
+  { key: "staff", label: "Add staff and place them at outlets", perms: ["org.staff.write", "org.placement.write"] },
+  { key: "invite", label: "Invite people (internal, client, staff)", perms: ["invite_internal", "invite_client", "invite_staff"] },
+  { key: "sensitive", label: "Review staff sensitive details", perms: ["staff.sensitive.review"] },
+  { key: "reveal", label: "Reveal staff sensitive details", perms: ["staff.sensitive.reveal"] },
+  { key: "all", label: "Every client (not limited to assigned ones)", perms: ["all_clients"] },
+];
+async function liveMatrix(): Promise<AccessMatrix> {
+  const res = await teamRolesWire();
+  if (!res.ok) { if (res.reason === "no_access" || res.reason === "forbidden") throw new RestrictedError(); throw new Error("unavailable"); }
+  const roles = res.roles.map(rec).filter((x): x is Record<string, unknown> => !!x && ROLE_ORDER.includes(str(x.roleKey)))
+    .sort((a, b) => ROLE_ORDER.indexOf(str(a.roleKey)) - ROLE_ORDER.indexOf(str(b.roleKey)));
+  const perms = new Map(roles.map((x) => [str(x.roleKey), rec(x.permissions) ?? {}]));
+  return {
+    roles: roles.map((x) => ({ id: str(x.roleKey), name: ROLE_LABEL[str(x.roleKey)] ?? str(x.roleKey), summary: ROLE_SUMMARY[str(x.roleKey)] ?? "" })),
+    rows: CAPABILITY_ROWS.map((row) => ({
+      key: row.key, label: row.label, source: "Live permissions",
+      cells: Object.fromEntries(roles.map((x) => {
+        const p = perms.get(str(x.roleKey)) ?? {};
+        const has = row.perms.filter((k) => p[k] === true).length;
+        const level: CapabilityLevel = has === row.perms.length ? (row.key !== "all" && p.all_clients !== true && str(x.roleKey) !== "head_of_operations" ? "scoped" : "yes") : has > 0 ? "scoped" : "no";
+        return [str(x.roleKey), level];
+      })),
+    })),
+  };
+}
+
 export function createLiveTeamAccessAdapter(createLink:CreateLink=createInvitationAccessLink,listWire:ListWire=listInvitationsWire,overrides:Partial<Dependencies>={}):TeamAccessAdapter {
   const deps:Dependencies={session:getSession,create:createInvitationDraft,edit:editInvitationDraft,action:invitationAction,status:checkInvitationStatus,org:orgCall,...overrides};
   const listeners=new Set<(event:AdapterEvent)=>void>();
@@ -120,7 +185,7 @@ export function createLiveTeamAccessAdapter(createLink:CreateLink=createInvitati
   }
   return {
     subscribe(listener){listeners.add(listener);return()=>void listeners.delete(listener);},getCapabilities,getFacets,
-    getMatrix:notConnected,listInternal:notConnected,listClientUsers:notConnected,listAccounts:notConnected,
+    getMatrix:liveMatrix,listInternal:(q)=>teamPage("internal",q),listClientUsers:(q)=>teamPage("client",q),listAccounts:(q)=>teamPage("account",q),
     async getInvitation(id,expected){const expectedRevision=revision(id,expected);const result=await deps.status(id);if(!result.ok)throw new Error(result.reason==="rate_limited"?"rate_limited":"unavailable");if(result.invitation.id!==id||result.invitation.revision!==expectedRevision)throw new Error("conflict");return managed(result.invitation);},
     findDuplicates:notConnected,setState:notConnected,updateAccess:notConnected,getHistory:notConnected,
     async invite(input){

@@ -104,12 +104,12 @@ export function TeamAccess({ initialTab }: { initialTab?: TeamTab }) {
         onChange={(k: TeamTab) => url.set({ tab: k })}
       />
 
-      {!liveMode && tab === "internal" ? <PeopleList key="internal" list="internal" caps={c} onNotice={setNotice} /> : null}
-      {!liveMode && tab === "clients" ? <PeopleList key="clients" list="clients" caps={c} onNotice={setNotice} /> : null}
-      {!liveMode && tab === "accounts" ? <PeopleList key="accounts" list="accounts" caps={c} onNotice={setNotice} /> : null}
-      {liveMode && tab !== "invitations" ? <div className="ap-card rounded-2xl p-6"><h2 className="text-lg font-semibold">Coming soon</h2><p className="mt-2 text-[15px] text-(--ap-muted)">Account lists and access changes are not available here yet. Open Invitations to invite someone or check an invitation.</p></div> : null}
+      {tab === "internal" ? <PeopleList key="internal" list="internal" caps={c} onNotice={setNotice} /> : null}
+      {tab === "clients" ? <PeopleList key="clients" list="clients" caps={c} onNotice={setNotice} /> : null}
+      {tab === "accounts" ? <PeopleList key="accounts" list="accounts" caps={c} onNotice={setNotice} /> : null}
+      {/* Live (team-access-read.sql): Internal team, Client users, Accounts and Roles show REAL people and permissions. */}
       {tab === "invitations" ? <InvitationsList caps={c} onNotice={setNotice} /> : null}
-      {!liveMode && tab === "roles" ? <RolesMatrix /> : null}
+      {tab === "roles" ? <RolesMatrix /> : null}
 
       {inviting ? <InviteSheet kind={inviting} onClose={() => setInviting(null)} onDone={() => setNotice({ kind: "ok", text: liveMode ? "Invitation created. Choose Send invitation or create an access link from Invitations." : "Invitation recorded as pending. Email delivery is connected later." })} /> : null}
 
