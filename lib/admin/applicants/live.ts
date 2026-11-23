@@ -41,8 +41,13 @@ type DetailDto = RowDto & {
   events: { action: "draft_opened" | "submitted"; at: string }[];
 };
 type PageDto = { items: RowDto[]; total: number; page: number; pageSize: number };
+type HistoryDto = {
+  revision: number; onHold: boolean; lifecycle: Lifecycle; stage: number;
+  capabilities: { shortlist: boolean; hold: boolean; resume: boolean; reject: boolean; talentPool: boolean; note: boolean };
+  history: { action: string; at: string; note: string | null; from: string | null; to: string | null; actor: string }[];
+};
 
-async function call<T>(action: "list" | "read", body: Record<string, unknown>): Promise<T> {
+async function call<T>(action: "list" | "read" | "act" | "history", body: Record<string, unknown>): Promise<T> {
   const res = await fetch(`/api/admin/applications/${action}`, {
     method: "POST",
     credentials: "same-origin",
@@ -58,7 +63,8 @@ async function call<T>(action: "list" | "read", body: Record<string, unknown>): 
   }
   const code = json?.error?.code;
   if (code === "forbidden" || code === "unauthenticated") throw new RestrictedError();
-  throw new Error(code ?? "unavailable");
+  const message = (json?.error as { message?: unknown } | undefined)?.message;
+  throw Object.assign(new Error(typeof message === "string" ? message : "This could not be saved. Please try again."), { code: code ?? "unavailable" });
 }
 
 /* ---------- mapping ---------- */
@@ -111,7 +117,24 @@ function field(id: string, label: string, value: string | undefined | null, item
   return { id, label, value: value && value.trim() ? value : items?.length ? null : null, ...(items?.length ? { items } : {}) };
 }
 
-function toDetail(d: DetailDto): ApplicantDetail {
+const ACTION_LABEL: Record<string, string> = {
+  draft_opened: "Application started", submitted: "Application submitted", shortlisted: "Shortlisted", held: "Put on hold",
+  resumed: "Taken off hold", rejected: "Rejected", talent_pool: "Moved to Talent Pool", note: "Note added",
+};
+const STAGE_NAMES = ["Application", "Review / shortlisting", "Interview / assessment", "Documentation", "Verification", "Selection / approval", "Staff onboarding", "Assignment"];
+/** "submitted:hold:1" -> "Review / shortlisting (on hold)"; lifecycle words for the end states. */
+function stateLabel(v: string | null): string | null {
+  if (!v) return null;
+  const [life, a, b] = v.split(":");
+  const hold = a === "hold";
+  const stage = Number(hold ? b : a);
+  if (life === "not_selected") return "Not selected";
+  if (life === "in_talent_pool") return "Talent Pool";
+  return `${STAGE_NAMES[stage] ?? "Application"}${hold ? " (on hold)" : ""}`;
+}
+const revisions = new Map<string, number>();
+
+function toDetail(d: DetailDto, h: HistoryDto | null = null): ApplicantDetail {
   const f = d.form ?? {};
   const skills = Object.values(f.skills ?? {}).flat();
   const documents: ApplicantDocument[] = d.attachments.map((a) => ({
@@ -132,9 +155,17 @@ function toDetail(d: DetailDto): ApplicantDetail {
     },
     { id: "documents", kind: "documents", title: "Documents", lastEditedAt: null, fields: documents.map((doc) => field(doc.id, doc.type, doc.state === "needs-review" ? "Virus-checked, waiting for HR review" : doc.state === "verified" ? "Verified" : doc.state === "rejected" ? "Rejected" : "Checking")) },
   ];
-  const activity: ActivityRecord[] = d.events.map((e, i) => ({ id: `ev-${i}`, actor: d.applicantName, at: e.at, action: e.action === "submitted" ? "Application submitted" : "Application started", from: null, to: null }));
+  const activity: ActivityRecord[] = h
+    ? h.history.filter((e) => e.action !== "note").map((e, i) => ({ id: `h-${i}`, actor: e.action === "submitted" || e.action === "draft_opened" ? d.applicantName : e.actor, at: e.at, action: ACTION_LABEL[e.action] ?? e.action, from: stateLabel(e.from), to: stateLabel(e.to) }))
+    : d.events.map((e, i) => ({ id: `ev-${i}`, actor: d.applicantName, at: e.at, action: e.action === "submitted" ? "Application submitted" : "Application started", from: null, to: null }));
+  const notes = h ? h.history.filter((e) => e.action === "note" && e.note).map((e, i) => ({ id: `n-${i}`, author: e.actor, at: e.at, body: e.note as string })) : [];
+  const c = h?.capabilities;
+  if (h) revisions.set(d.applicationId, h.revision);
+  const row = toRow({ ...d, lifecycle: h?.lifecycle ?? d.lifecycle, stage: h?.stage ?? d.stage }, f);
   return {
-    ...toRow(d, f),
+    ...row,
+    status: h?.onHold ? "hold" : row.status,
+    nextAction: h?.onHold ? null : row.nextAction,
     email: f.email ?? "",
     phone: f.phone ?? "",
     location: f.preferredLocation ?? "",
@@ -148,13 +179,18 @@ function toDetail(d: DetailDto): ApplicantDetail {
     employmentType: "",
     interviewState: "Not scheduled",
     assessmentState: "",
-    nextRequired: { title: "Review this application", detail: "Check the answers and documents. Shortlisting, interviews and approval are being connected next.", owner: "hr" },
-    capabilities: { canShortlist: false, canHold: false, canReject: false, canRequestInfo: false, canSubmitForApproval: false, canApproveSelection: false, canAddNote: false, canMoveToTalentPool: false },
+    nextRequired: h?.onHold
+      ? { title: "On hold", detail: "This application is paused. Check the history for the reason.", owner: "hr" }
+      : row.status === "rejected" ? { title: "Not selected", detail: "No further action is needed. The record is kept for history.", owner: "none" }
+      : row.inTalentPool ? { title: "In the Talent Pool", detail: "They can be matched to future roles.", owner: "none" }
+      : row.stage >= 1 ? { title: "Shortlisted", detail: "Interviews and approval are being connected next.", owner: "hr" }
+      : { title: "Review this application", detail: "Check the answers and documents, then shortlist, hold or reject.", owner: "hr" },
+    capabilities: { canShortlist: !!c?.shortlist, canHold: !!c?.hold, canReject: !!c?.reject, canRequestInfo: false, canSubmitForApproval: false, canApproveSelection: false, canAddNote: !!c?.note, canMoveToTalentPool: !!c?.talentPool },
     documents,
     screening: [],
     submission: { submittedAt: d.submittedAt, sections: sections.filter((s) => s.fields.length) },
     interviews: [],
-    notes: [],
+    notes,
     activity,
   };
 }
@@ -178,6 +214,14 @@ function inTab(r: ApplicantRow, tab: StageTab): boolean {
 }
 
 const listeners = new Set<(e: AdapterEvent) => void>();
+
+async function act(id: string, action: string, note?: string) {
+  // Started from the list (record not opened yet): read its current revision first.
+  const expectedRevision = revisions.get(id) ?? (await call<HistoryDto>("history", { applicationId: id })).revision;
+  const r = await call<{ revision: number }>("act", { applicationId: id, expectedRevision, action, ...(note && note.trim() ? { note: note.trim() } : {}) });
+  revisions.set(id, r.revision);
+  for (const l of listeners) l("reset"); // lists and counts reload
+}
 
 export const liveApplicantsAdapter: ApplicantsAdapter = {
   subscribe(listener) {
@@ -214,17 +258,27 @@ export const liveApplicantsAdapter: ApplicantsAdapter = {
   async getApplicant(id: string): Promise<ApplicantDetail | null> {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
     try {
-      return toDetail(await call<DetailDto>("read", { applicationId: id }));
+      // History/capabilities are optional: before the phase 1 database change they are simply not there (read-only view).
+      const [d, h] = await Promise.all([call<DetailDto>("read", { applicationId: id }), call<HistoryDto>("history", { applicationId: id }).catch(() => null)]);
+      return toDetail(d, h);
     } catch (e) {
       if (e instanceof RestrictedError) throw e;
       if (e instanceof Error && (e.message === "invalid_request" || e.message === "not_found")) return null;
       throw e;
     }
   },
-  async performAction() {
-    throw new Error("Recruitment actions are not connected yet.");
+  async performAction(id, input) {
+    const action = input.action === "talent-pool" ? "talent_pool" : input.action;
+    if (!["shortlist", "hold", "reject", "talent_pool"].includes(action)) throw new Error("This step is not connected yet.");
+    await act(id, action, input.note);
+    const next = await liveApplicantsAdapter.getApplicant(id);
+    if (!next) throw new Error("Reload to see this application.");
+    return next;
   },
-  async addNote() {
-    throw new Error("Notes are not connected yet.");
+  async addNote(id, body) {
+    await act(id, "note", body);
+    const next = await liveApplicantsAdapter.getApplicant(id);
+    if (!next) throw new Error("Reload to see this application.");
+    return next;
   },
 };

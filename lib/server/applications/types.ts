@@ -16,7 +16,9 @@ export type ApplicationErrorCode =
   | "documents_missing"
   | "documents_unsupported"
   | "test_unavailable"
-  | "screening_incomplete";
+  | "screening_incomplete"
+  | "note_required"
+  | "invalid_transition";
 
 export type ApplicationFailure = { ok: false; code: ApplicationErrorCode; fields?: Record<string, string>; requestId?: string };
 export type ApplicationResult<T> = ({ ok: true } & T) | ApplicationFailure;
@@ -83,6 +85,18 @@ export type AdminApplicationDetailDto = AdminApplicationRowDto & {
   events: { action: "draft_opened" | "submitted"; at: string }[];
 };
 
+/** Phase 1 HR actions (recruitment-actions-phase1.sql). */
+export type AdminAction = "shortlist" | "hold" | "resume" | "reject" | "talent_pool" | "note";
+export type AdminActReceiptDto = { revision: number; lifecycle: ApplicationLifecycle; stage: number; onHold: boolean };
+export type AdminHistoryDto = {
+  revision: number;
+  onHold: boolean;
+  lifecycle: ApplicationLifecycle;
+  stage: number;
+  capabilities: { shortlist: boolean; hold: boolean; resume: boolean; reject: boolean; talentPool: boolean; note: boolean };
+  history: { action: string; at: string; note: string | null; from: string | null; to: string | null; actor: string }[];
+};
+
 /** Verified Talent identity (provider user + claims + access context). Produced by runtime, never by the browser. */
 export type ApplicantIdentity = {
   uid: string;
@@ -106,6 +120,8 @@ export type ApplicationsGateway = {
   readMine(args: { actorUid: string; sessionId: string; applicationId: string }): PromiseLike<RpcReply>;
   adminList(args: { actorUid: string; sessionId: string; query: { page: number; pageSize: number; vacancyId?: string } }): PromiseLike<RpcReply>;
   adminRead(args: { actorUid: string; sessionId: string; applicationId: string }): PromiseLike<RpcReply>;
+  adminAct(args: { actorUid: string; sessionId: string; applicationId: string; expectedRevision: number; action: AdminAction; note: string | null }): PromiseLike<RpcReply>;
+  adminHistory(args: { actorUid: string; sessionId: string; applicationId: string }): PromiseLike<RpcReply>;
 };
 
 export type ApplicationsDependencies = {

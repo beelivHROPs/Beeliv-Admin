@@ -1,5 +1,5 @@
 /** HTTP edge for the applications module: method, origin, content-type and body-size checks, then the service. */
-import { adminListApplications, adminReadApplication, getDraft, getMyApplication, listMyApplications, openDraft, saveDraft, submitApplication } from "./service";
+import { adminActOnApplication, adminApplicationHistory, adminListApplications, adminReadApplication, getDraft, getMyApplication, listMyApplications, openDraft, saveDraft, submitApplication } from "./service";
 import type { ApplicationErrorCode, ApplicationFailure, ApplicationResult, ApplicationsDependencies } from "./types";
 
 export const MAX_BODY_BYTES = 40_000; // form cap is 32 KiB plus envelope
@@ -12,10 +12,12 @@ const MESSAGES: Record<ApplicationErrorCode, string> = {
   documents_missing: "Your CV, passport photo and valid ID must be uploaded and checked first.",
   documents_unsupported: "This job needs documents we cannot collect yet.", test_unavailable: "This job needs a test we cannot offer yet.",
   screening_incomplete: "Answer the required screening questions.",
+  note_required: "Add a short reason first.", invalid_transition: "This application has already moved on. Reload to see its current state.",
 };
 const STATUS: Record<ApplicationErrorCode, number> = {
   unavailable: 503, unauthenticated: 401, forbidden: 403, invalid_request: 400, conflict: 409, stale: 409, closed: 409,
   rate_limited: 429, outcome_unknown: 503, documents_missing: 422, documents_unsupported: 422, test_unavailable: 422, screening_incomplete: 422,
+  note_required: 422, invalid_transition: 409,
 };
 const HEADERS = { "Cache-Control": "private, no-store" };
 
@@ -49,7 +51,7 @@ type Action = (raw: unknown, deps: ApplicationsDependencies) => Promise<Applicat
 export const APPLICANT_ACTIONS: Record<string, Action> = {
   "draft-open": openDraft, "draft-get": getDraft, "draft-save": saveDraft, submit: submitApplication, list: listMyApplications, read: getMyApplication,
 };
-export const ADMIN_ACTIONS: Record<string, Action> = { list: adminListApplications, read: adminReadApplication };
+export const ADMIN_ACTIONS: Record<string, Action> = { list: adminListApplications, read: adminReadApplication, act: adminActOnApplication, history: adminApplicationHistory };
 
 export async function handleApplications(request: Request, action: string, actions: Record<string, Action>, deps: ApplicationsDependencies, origin: string): Promise<Response> {
   if (!deps.enabled) return failure({ ok: false, code: "unavailable" });

@@ -13,5 +13,7 @@ export function applicationsGateway(port: ApplicationsRpcPort): ApplicationsGate
     readMine: (a) => port.rpc("recruitment_application_applicant_read", { p_actor_uid: a.actorUid, p_session_id: a.sessionId, p_application_id: a.applicationId }),
     adminList: (a) => port.rpc("recruitment_application_admin_list", { p_actor_uid: a.actorUid, p_session_id: a.sessionId, p_query: a.query }),
     adminRead: (a) => port.rpc("recruitment_application_admin_read", { p_actor_uid: a.actorUid, p_session_id: a.sessionId, p_application_id: a.applicationId }),
+    adminAct: (a) => port.rpc("recruitment_application_admin_act", { p_actor_uid: a.actorUid, p_session_id: a.sessionId, p_application_id: a.applicationId, p_expected_revision: a.expectedRevision, p_action: a.action, p_note: a.note }),
+    adminHistory: (a) => port.rpc("recruitment_application_admin_history", { p_actor_uid: a.actorUid, p_session_id: a.sessionId, p_application_id: a.applicationId }),
   };
 }
