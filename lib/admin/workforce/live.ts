@@ -7,7 +7,8 @@ import type { AdapterEvent } from "../adapter";
 import { RestrictedError } from "../adapter";
 import type { WorkforceAdapter } from "./adapter";
 import type {
-  AttendanceDetail, AttendancePage, AttendanceRow, AttendanceStatus, AttendanceTab, ScopeFacets, ShiftConflict, ShiftRow, ShiftState, WeekRoster,
+  AttendanceDetail, AttendancePage, AttendanceRow, AttendanceStatus, AttendanceTab, LeavePage, LeaveRow, LeaveStatus, LeaveTab, ScopeFacets, ShiftConflict, ShiftRow, ShiftState,
+  StaffLeaveHistory, TimeOffResult, WeekRoster,
 } from "./types";
 import { addDays, startOfWeek, todayISO } from "@/lib/client/format";
 
@@ -17,6 +18,8 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const arr = (v: unknown) => (Array.isArray(v) ? v : []);
 const NOT_CONNECTED = "This isn't connected yet.";
 const REASON: Record<string, string> = {
+  note_required: "Add a short reason first.",
+  invalid_transition: "This request has already been decided. Reload to see it.",
   stale: "Someone changed this roster. Reload and try again.",
   not_placed: "This person is not placed at this outlet.",
   already_worked: "This shift has already been worked, so it can't be removed.",
@@ -92,6 +95,40 @@ function attendanceRow(raw: unknown): AttendanceRow | null {
   };
 }
 
+/* ---------- leave (workforce-leave.sql) ---------- */
+let leaveCache: { rows: LeaveRow[]; canApprove: boolean; types: string[] } | null = null;
+const leaveRevisions = new Map<string, number>();
+function leaveRow(raw: unknown): LeaveRow | null {
+  const l = rec(raw);
+  if (!l) return null;
+  const staff = rec(l.staff) ?? {};
+  leaveRevisions.set(str(l.id), Number(l.revision) || 1);
+  return {
+    id: str(l.id), staff: { id: str(staff.id), name: str(staff.name) }, clientId: str(l.clientId), client: str(l.client) || "Not placed",
+    outletId: str(l.outletId), outlet: str(l.outlet), type: str(l.type), startDate: str(l.startDate), endDate: str(l.endDate),
+    days: Number(l.days) || 0, balance: null, status: (["pending", "approved", "declined", "cancelled"].includes(str(l.status)) ? str(l.status) : "pending") as LeaveStatus,
+    submittedAt: str(l.submittedAt), decidedBy: str(l.decidedBy) || null, decidedAt: str(l.decidedAt) || null, reason: str(l.reason) || null,
+    decisionNote: str(l.decisionNote) || null, attachmentName: null,
+    history: arr(l.history).map(rec).filter((h): h is Rec => !!h).map((h) => ({ id: str(h.id), action: str(h.action), actor: str(h.actor), at: str(h.at), previous: null, next: null, note: str(h.note) || null })),
+  };
+}
+async function leaves(force = false) {
+  if (leaveCache && !force) return leaveCache;
+  const r = await call("leave", {});
+  leaveCache = { rows: arr(r.items).map(leaveRow).filter((x): x is LeaveRow => !!x), canApprove: r.canApprove === true, types: arr(r.types).map(str) };
+  return leaveCache;
+}
+/** Approved leave covering a date (for attendance "on leave" and "who is off"). */
+const onLeave = (rows: LeaveRow[], personId: string, date: string) => rows.some((l) => l.status === "approved" && l.staff.id === personId && l.startDate <= date && l.endDate >= date);
+async function decide(id: string, decision: "approve" | "decline", note: string) {
+  await call("leave-decide", { leaveId: id, expectedRevision: leaveRevisions.get(id), decision, note });
+  changed();
+  const fresh = await leaves(true);
+  const row = fresh.rows.find((l) => l.id === id);
+  if (!row) throw new Error("Reload to see this request.");
+  return row;
+}
+
 export const liveWorkforceAdapter: WorkforceAdapter = {
   subscribe(listener) {
     listeners.add(listener);
@@ -100,7 +137,9 @@ export const liveWorkforceAdapter: WorkforceAdapter = {
 
   async listAttendance(q): Promise<AttendancePage> {
     const [{ facets }, r] = await Promise.all([outlets(), call("attendance", { from: q.from, to: q.to })]);
-    const all = arr(r.items).map(attendanceRow).filter((x): x is AttendanceRow => !!x);
+    const leave = await leaves(true).catch(() => null);
+    const all = arr(r.items).map(attendanceRow).filter((x): x is AttendanceRow => !!x)
+      .map((row) => (leave && !row.checkIn && onLeave(leave.rows, row.staff.id, row.date) ? { ...row, status: "on-leave" as AttendanceStatus } : row));
     lastRows = all;
     const term = q.search.trim().toLowerCase();
     const scoped = all.filter((row) => (!q.clientId || row.clientId === q.clientId) && (!q.outletId || row.outletId === q.outletId)
@@ -114,7 +153,7 @@ export const liveWorkforceAdapter: WorkforceAdapter = {
     return {
       rows: rows.slice(0, q.pageSize), total: rows.length, tabCounts, facets, workspaceEmpty: all.length === 0,
       today: { date: today, scheduled: t.length, checkedIn: t.filter((r2) => r2.checkIn).length, notYet: t.filter((r2) => r2.status === "not-yet").length,
-        late: t.filter((r2) => r2.status === "late").length, absent: t.filter((r2) => r2.status === "absent").length, onLeave: 0 },
+        late: t.filter((r2) => r2.status === "late").length, absent: t.filter((r2) => r2.status === "absent").length, onLeave: t.filter((r2) => r2.status === "on-leave").length },
     };
   },
   async getAttendance(id): Promise<AttendanceDetail | null> {
@@ -161,11 +200,40 @@ export const liveWorkforceAdapter: WorkforceAdapter = {
     return roster(outletId, weekStart);
   },
 
-  async listLeave() { throw new Error(NOT_CONNECTED); },
-  async listTimeOff() { throw new Error(NOT_CONNECTED); },
-  async getStaffLeaveHistory() { throw new Error(NOT_CONNECTED); },
-  async approveLeave() { throw new Error(NOT_CONNECTED); },
-  async declineLeave() { throw new Error(NOT_CONNECTED); },
+  async listLeave(q): Promise<LeavePage> {
+    const [{ facets }, l] = await Promise.all([outlets(), leaves(true)]);
+    const term = q.search.trim().toLowerCase();
+    const scoped = l.rows.filter((row) => (!q.clientId || row.clientId === q.clientId) && (!q.outletId || row.outletId === q.outletId) && (!q.type || row.type === q.type)
+      && (!term || [row.staff.name, row.outlet, row.client, row.type].some((v) => v.toLowerCase().includes(term))));
+    const tabs: LeaveTab[] = ["pending", "approved", "declined", "cancelled"];
+    const tabCounts = Object.fromEntries(tabs.map((t) => [t, scoped.filter((row) => row.status === t).length])) as Record<LeaveTab, number>;
+    const rows = scoped.filter((row) => row.status === q.tab);
+    const today = todayISO();
+    const whoIsOff = Array.from({ length: 7 }, (_, i) => addDays(today, i)).map((date) => ({
+      date, people: l.rows.filter((row) => row.status === "approved" && row.startDate <= date && row.endDate >= date).map((row) => row.staff),
+    })).filter((d) => d.people.length);
+    return { rows: rows.slice(0, q.pageSize), total: rows.length, tabCounts, whoIsOff, facets: { ...facets, types: l.types }, canApprove: l.canApprove, workspaceEmpty: l.rows.length === 0 };
+  },
+  async listTimeOff(q): Promise<TimeOffResult> {
+    const l = await leaves(true);
+    const term = q.search.trim().toLowerCase();
+    const approved = l.rows.filter((row) => row.status === "approved" && row.endDate >= q.from && row.startDate <= q.to && (!term || row.staff.name.toLowerCase().includes(term)));
+    const days: TimeOffResult["days"] = [];
+    for (let d = q.from; d <= q.to; d = addDays(d, 1)) {
+      const people = approved.filter((row) => row.startDate <= d && row.endDate >= d).map((row) => ({ ...row.staff, type: row.type, requestId: row.id }));
+      if (people.length) days.push({ date: d, people });
+    }
+    return { days, entries: approved.map((row) => ({ id: row.id, staff: row.staff, type: row.type, startDate: row.startDate, endDate: row.endDate, days: row.days, outlet: row.outlet, client: row.client, decidedBy: row.decidedBy, decidedAt: row.decidedAt })), workspaceEmpty: l.rows.length === 0 };
+  },
+  async getStaffLeaveHistory(staffId): Promise<StaffLeaveHistory | null> {
+    const l = await leaves();
+    const mine = l.rows.filter((row) => row.staff.id === staffId);
+    const year = todayISO().slice(0, 4);
+    return { takenThisYear: mine.filter((row) => row.status === "approved" && row.startDate.startsWith(year)).reduce((n, row) => n + row.days, 0), balance: null,
+      requests: mine.map((row) => ({ id: row.id, type: row.type, startDate: row.startDate, endDate: row.endDate, days: row.days, status: row.status })) };
+  },
+  async approveLeave(id) { return decide(id, "approve", ""); },
+  async declineLeave(id, input) { return decide(id, "decline", input.reason); },
   async listWarnings() { throw new Error(NOT_CONNECTED); },
   async getWarning() { throw new Error(NOT_CONNECTED); },
   async issueWarning() { throw new Error(NOT_CONNECTED); },
