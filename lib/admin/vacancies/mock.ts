@@ -262,6 +262,7 @@ function toRow(s: Stored): VacancyRow {
     postedAt: s.postedAt,
     closesOn: i.closesOn,
     endedAt: s.endedAt,
+    salary: structuredClone(i.salary),
   };
 }
 

@@ -55,6 +55,8 @@ export function FiltersButton({
   resultCount,
   onClear,
   children,
+  triggerLabel,
+  triggerClassName,
 }: {
   /** How many filters are applied (a sort never counts). */
   active: number;
@@ -62,6 +64,10 @@ export function FiltersButton({
   resultCount?: number;
   onClear?: () => void;
   children: ReactNode | ((ctx: { sheet: boolean }) => ReactNode);
+  /** Optional visible word beside the funnel (e.g. "Filter" inside the Jobs search bar). */
+  triggerLabel?: string;
+  /** Optional: replaces the trigger's own look (the Jobs search bar's tinted pill). Behaviour is unchanged. */
+  triggerClassName?: string;
 }) {
   const { open, setOpen, wrap, trigger } = usePopover();
   const phone = useIsPhone();
@@ -82,10 +88,17 @@ export function FiltersButton({
         aria-label={active > 0 ? `Filters, ${active} applied` : "Filters"}
         title="Filters"
         onClick={() => (phone ? setSheetOpen((o) => !o) : setOpen(!open))}
-        className={`ap-hit relative inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-(--ap-violet) focus-visible:outline-none max-[767px]:size-11 max-[767px]:bg-white max-[767px]:px-0 max-[767px]:text-(--ap-ink) ${isOpen || active ? "border-(--ap-violet) text-(--ap-violet)" : "border-(--ap-line) text-(--ap-ink-2) hover:bg-(--ap-line-2)"}`}
+        data-open={isOpen ? "" : undefined}
+        className={
+          triggerClassName ??
+          `ap-hit relative inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-(--ap-violet) focus-visible:outline-none max-[767px]:size-11 max-[767px]:bg-white max-[767px]:px-0 max-[767px]:text-(--ap-ink) ${isOpen || active ? "border-(--ap-violet) text-(--ap-violet)" : "border-(--ap-line) text-(--ap-ink-2) hover:bg-(--ap-line-2)"}`
+        }
       >
-        <Funnel className="size-[18px] max-[767px]:size-5" strokeWidth={1.7} aria-hidden="true" />
-        {active > 0 ? <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-(--ap-violet) px-1.5 text-[11px] leading-5 font-bold text-white tabular-nums max-[767px]:absolute max-[767px]:-top-1 max-[767px]:-right-1 max-[767px]:h-[18px] max-[767px]:min-w-[18px] max-[767px]:px-1 max-[767px]:text-[12px] max-[767px]:leading-none">{active}</span> : null}
+        <Funnel className={triggerClassName ? "size-[18px]" : "size-[18px] max-[767px]:size-5"} strokeWidth={1.7} aria-hidden="true" />
+        {triggerLabel ? <span aria-hidden="true">{triggerLabel}</span> : null}
+        {active > 0 ? (
+          <span className={triggerClassName ? "inline-flex min-w-5 items-center justify-center rounded-full bg-(--ap-violet) px-1.5 text-[11px] leading-5 font-bold text-(--ap-surface) tabular-nums" : "inline-flex min-w-5 items-center justify-center rounded-full bg-(--ap-violet) px-1.5 text-[11px] leading-5 font-bold text-white tabular-nums max-[767px]:absolute max-[767px]:-top-1 max-[767px]:-right-1 max-[767px]:h-[18px] max-[767px]:min-w-[18px] max-[767px]:px-1 max-[767px]:text-[12px] max-[767px]:leading-none"}>{active}</span>
+        ) : null}
       </button>
       {!phone && open ? (
         <div id={id} role="dialog" aria-label="Filters" className="ap-pop-in absolute top-[calc(100%+8px)] right-0 z-[150] w-[min(440px,calc(100vw-32px))] rounded-2xl border border-(--ap-line) bg-(--ap-surface) shadow-(--ap-shadow)">

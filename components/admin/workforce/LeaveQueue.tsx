@@ -20,6 +20,7 @@ import { CARD_LIST, HEAD_ROW, ListCard, ListTabs, ListToolbar, NoResults, TABLE_
 import { Check, DoorOpen, X } from "@/components/applicant/icons";
 import { EmptyState, PageHeading } from "@/components/applicant/primitives";
 import { ScopeGate, ScopeNote } from "@/components/admin/ScopeNote";
+import { rowOpenClick, rowOpenKey } from "@/components/admin/RowClick";
 import { approveLeave, declineLeave, useLeave } from "@/lib/admin/workforce/hooks";
 import type { LeavePage, LeaveQuery, LeaveRow, LeaveTab } from "@/lib/admin/workforce/types";
 import { ANY, Fact, HistoryList, LeaveStatusChip, NoteSheet, scopeFilterDefs, SHEET_BTN, Sheet, StaffCell, TH, DT, leaveRange, stamp, useSearchCommit, withAny } from "./parts";
@@ -234,7 +235,14 @@ function InCard(p: Parameters<typeof EmptyCard>[0]) {
   );
 }
 
-const ROW = "min-h-[68px] border-t border-(--ap-line-2) px-2 py-2 hover:bg-(--ap-tint-soft)";
+/* Lead 2026-11-24: the whole row opens the leave request panel (focusable row, Enter/Space opens). A "Review" button
+   stays only on pending rows as the call to action; decided rows have no separate "View" button. */
+const ROW = "min-h-[68px] cursor-pointer border-t border-(--ap-line-2) px-2 py-2 hover:bg-(--ap-tint-soft) focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--ap-violet)";
+const rowOpen = (r: LeaveRow, onReview: (id: string) => void) => ({
+  tabIndex: 0,
+  onClick: rowOpenClick(() => onReview(r.id)),
+  onKeyDown: rowOpenKey(() => onReview(r.id)),
+});
 const COLS = "grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_92px]";
 
 function Balance({ r }: { r: LeaveRow }) {
@@ -255,7 +263,7 @@ function Table({ rows, onReview }: { rows: LeaveRow[]; onReview: (id: string) =>
         </span>
       </div>
       {rows.map((r) => (
-        <div key={r.id} role="row" className={`grid ${COLS} items-center gap-x-4 ${ROW}`}>
+        <div key={r.id} role="row" {...rowOpen(r, onReview)} className={`grid ${COLS} items-center gap-x-4 ${ROW}`}>
           <div role="cell" className="min-w-0">
             <StaffCell staff={r.staff} sub={r.outlet} />
           </div>
@@ -270,9 +278,11 @@ function Table({ rows, onReview }: { rows: LeaveRow[]; onReview: (id: string) =>
             <span className="mt-1 block truncate text-[12px] text-(--ap-muted)">{r.decidedBy ? `By ${r.decidedBy}` : <Balance r={r} />}</span>
           </div>
           <div role="cell" className="text-right">
-            <button type="button" onClick={() => onReview(r.id)} className="ap-btn ap-btn-s ap-btn-sm h-9">
-              Review
-            </button>
+            {r.status === "pending" ? (
+              <button type="button" onClick={() => onReview(r.id)} className="ap-btn ap-btn-s ap-btn-sm h-9">
+                Review
+              </button>
+            ) : null}
           </div>
         </div>
       ))}
@@ -284,7 +294,7 @@ function Cards({ rows, onReview }: { rows: LeaveRow[]; onReview: (id: string) =>
   return (
     <ul className={`${CARD_LIST} @min-[860px]:hidden`}>
       {rows.map((r) => (
-        <li key={r.id} className="border-t border-(--ap-line-2) py-2.5 first:border-t-0">
+        <li key={r.id} {...rowOpen(r, onReview)} className="cursor-pointer border-t border-(--ap-line-2) py-2.5 first:border-t-0 hover:bg-(--ap-tint-soft) focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--ap-violet)">
           {/* Phone: two lines. Pending rows show a quiet text "Review"; decided rows show their status. */}
           <div className="flex items-center gap-2.5">
             <div className="min-w-0 flex-1">
@@ -295,12 +305,7 @@ function Cards({ rows, onReview }: { rows: LeaveRow[]; onReview: (id: string) =>
                 Review
               </button>
             ) : (
-              <>
-                <LeaveStatusChip status={r.status} />
-                <button type="button" onClick={() => onReview(r.id)} className="ap-hit inline-flex min-h-10 shrink-0 items-center px-1 text-[14px] font-bold text-(--ap-violet)">
-                  View
-                </button>
-              </>
+              <LeaveStatusChip status={r.status} />
             )}
           </div>
         </li>

@@ -33,3 +33,30 @@ export function RowClick() {
   }, [router]);
   return null;
 }
+
+/**
+ * For rows that open an in-page side panel instead of a link (lead 2026-11-24: "most of the cards should be
+ * clickable"). A click anywhere on the row opens it, except on a button, link, field, menu or anything marked
+ * `data-no-row`, so the row's own buttons and three-dot menu keep working (portalled menus included). Text
+ * selection is left alone. Keyboard users reach the same panel through the row's own button.
+ */
+export function rowOpenClick(open: () => void) {
+  return (e: React.MouseEvent<HTMLElement>) => {
+    if (e.defaultPrevented || e.button !== 0) return;
+    const hit = (e.target as HTMLElement | null)?.closest(INTERACTIVE);
+    if (hit && hit !== e.currentTarget) return;
+    if (window.getSelection()?.toString()) return;
+    open();
+  };
+}
+
+/** Keyboard partner of rowOpenClick for a row that is itself focusable (tabIndex 0): Enter or Space opens it. */
+export function rowOpenKey(open: () => void) {
+  return (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      open();
+    }
+  };
+}

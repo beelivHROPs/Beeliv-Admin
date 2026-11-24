@@ -33,6 +33,7 @@ export function isSampleAdminRoute(pathname: string, vacanciesLive = false): boo
   if (REAL_PREFIXES.some((p) => under(path, p))) return false;
   // Clients and outlets are live; client REQUESTS are not yet.
   if (under(path, "/admin/clients") && !under(path, "/admin/clients/requests")) return false;
-  if (vacanciesLive && under(path, "/admin/recruitment/vacancies")) return false;
+  // The Jobs page (/admin/jobs) is the vacancy list: real once the vacancies backend is on, Coming soon before that.
+  if (vacanciesLive && (under(path, "/admin/recruitment/vacancies") || under(path, "/admin/jobs"))) return false;
   return true;
 }

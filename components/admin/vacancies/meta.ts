@@ -89,6 +89,22 @@ function cardDates(d: Pick<VacancyDetail, "status" | "closesOn" | "endedAt">): {
   return { state: "open", closes: `Closes ${shortDate(d.closesOn)}` };
 }
 
+/**
+ * The champagne line on an Admin Jobs card (approved board v4): a job that is not live yet says so; a live job uses the
+ * applicant-side wording ("Closes in 6 days", "Closes today"); an ended job says when it ended.
+ */
+export function jobCardDateText(r: Pick<VacancyRow, "status" | "closesOn" | "endedAt">): string {
+  if (r.status === "draft") return "Not published";
+  if (r.status === "pending-approval") return "Not live yet";
+  if (r.status === "cancelled" || r.status === "filled") return closesText(r);
+  if (r.status === "paused") return `Paused · ${closesText(r)}`;
+  return cardDates(r).closes;
+}
+
+/** Card / quick-chip wording from the approved board: "Open" and "Waiting approval" read plainer than the stored names. */
+export const CARD_STATUS_LABEL: Record<VacancyStatus, string> = { ...STATUS_LABEL, published: "Open", "closing-soon": "Closing soon", "pending-approval": "Waiting approval" };
+export const QUICK_LABEL: Record<VacancyTab, string> = { ...TAB_LABEL, pending: "Waiting approval" };
+
 export function closesText(r: Pick<VacancyRow, "status" | "closesOn" | "endedAt">): string {
   if (r.status === "filled") return "Position filled";
   if (r.status === "closed") return `Closed ${r.endedAt ? formatIsoDate(r.endedAt) : formatYmd(r.closesOn)}`;
