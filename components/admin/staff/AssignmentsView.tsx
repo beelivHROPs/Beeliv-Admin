@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { confirmAction } from "@/components/applicant/ConfirmDialog";
-import { Plus, Search, X } from "@/components/applicant/icons";
+import { Clock3, Plus, Search, X } from "@/components/applicant/icons";
 import { Store } from "@/components/client/icons";
 import { EmptyState, PageHeading } from "@/components/applicant/primitives";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
@@ -31,6 +31,7 @@ const SORTS = [
 ];
 
 export function AssignmentsView() {
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const url = useUrlParams();
   const query = { search: url.get("q"), clientId: url.get("client") };
   const sort = SORTS.some((o) => o.value === url.get("sort")) ? url.get("sort") : "newest";
@@ -39,6 +40,7 @@ export function AssignmentsView() {
   const [shown, setShown] = useState<AssignmentsPage | null>(null);
   if (live.data && live.data !== shown) setShown(live.data);
   const page = live.data ?? shown;
+  const detailsRow = detailsFor ? (page?.rows.find((x) => x.staffId === detailsFor) ?? null) : null;
 
   const [searchText, setSearchText] = useState(query.search);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -144,7 +146,7 @@ export function AssignmentsView() {
                 ) : (
                   <ul className="m-0 flex list-none flex-col p-0">
                     {sorted.slice(0, batch.limit).map((r) => (
-                      <Row key={r.staffId} r={r} onReassign={() => setSheetFor(r.staffId)} />
+                      <Row key={r.staffId} r={r} onReassign={() => setSheetFor(r.staffId)} onView={() => setDetailsFor(r.staffId)} />
                     ))}
                   </ul>
                 )}
@@ -153,6 +155,13 @@ export function AssignmentsView() {
               </ListCard>
             </>
           )}
+          {detailsRow ? (
+            <AssignmentDetailsSheet
+              r={detailsRow}
+              onClose={() => setDetailsFor(null)}
+              onReassign={() => { setDetailsFor(null); setSheetFor(detailsRow.staffId); }}
+            />
+          ) : null}
           {sheetFor !== null ? <AssignSheet people={page.rows} facets={page.facets} initialStaffId={sheetFor} busy={busy} error={error} onCancel={close} onSubmit={submit} /> : null}
         </div>
       )}
@@ -160,7 +169,7 @@ export function AssignmentsView() {
   );
 }
 
-function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
+function Row({ r, onReassign, onView }: { r: AssignmentRow; onReassign: () => void; onView: () => void }) {
   const c = r.current;
   return (
     <li className="min-w-0 border-t border-(--ap-line-2) px-2 py-3 first:border-t-0 @min-[760px]:min-h-[68px]">
@@ -168,13 +177,9 @@ function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
         <div className="flex min-w-0 items-center gap-3 @min-[760px]:w-[32%]">
           <AdminAvatar name={r.name} size={40} viewable />
           <div className="min-w-0 leading-tight">
-            {c ? (
-              <Link href={staffHref(r.staffId)} className="block truncate text-[15px] font-bold text-(--ap-ink) hover:text-(--ap-violet)">
-                {r.name}
-              </Link>
-            ) : (
-              <b className="block truncate text-[15px]">{r.name}</b>
-            )}
+            <button type="button" onClick={onView} className="block max-w-full truncate text-left text-[15px] font-bold text-(--ap-ink) hover:text-(--ap-violet)">
+              {r.name}
+            </button>
             <span className="mt-0.5 block truncate text-[12px] text-(--ap-faint)" title={r.reference}>{r.reference}</span>
           </div>
         </div>
@@ -184,8 +189,8 @@ function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
               <b className="block truncate" title={`${c.client}, ${c.outlet}`}>
                 {c.client}, {c.outlet}
               </b>
-              <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={`${c.role} · ${c.department}`}>
-                {c.role} · {c.department}
+              <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={roleLine(c)}>
+                {roleLine(c)}
               </span>
               <span className="mt-0.5 block truncate text-[12px] text-(--ap-faint)">Since {formatDate(c.start)}</span>
             </>
@@ -195,6 +200,9 @@ function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {c ? <StatusChip tone="ok">Current</StatusChip> : null}
+          <button type="button" onClick={onView} className="ap-btn ap-btn-o ap-btn-sm h-10">
+            View details
+          </button>
           <button type="button" onClick={onReassign} className="ap-btn ap-btn-s ap-btn-sm h-10">
             {c ? "Reassign" : "Assign"}
           </button>
@@ -207,7 +215,7 @@ function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
             {r.history.map((h) => (
               <li key={h.id} className="border-l-2 border-(--ap-tint-2) pl-3.5 text-[14px] leading-snug">
                 <b className="block break-words">
-                  {h.client}, {h.outlet} · {h.role}
+                  {h.client}, {h.outlet}{h.role ? ` · ${h.role}` : ""}
                 </b>
                 <span className="text-(--ap-muted)">
                   {formatDateShort(h.start)} - {h.end ? formatDateShort(h.end) : "present"}
@@ -219,5 +227,110 @@ function Row({ r, onReassign }: { r: AssignmentRow; onReassign: () => void }) {
         </details>
       ) : null}
     </li>
+  );
+}
+
+/** "Chef · Kitchen", or just "Chef" when no department is recorded (never a dangling dot). */
+const roleLine = (a: { role: string; department: string }) => [a.role, a.department].filter((x) => x && x.trim()).join(" · ") || "Role not set";
+
+function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 text-[13px] font-bold tracking-wide text-(--ap-muted) uppercase">{label}</div>
+      <div className="text-[15px] wrap-anywhere">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Assignment details in the SAME approved side panel as Inbox "Case details" / Invitation details: 380px right drawer
+ * (bottom sheet on phones), header with close, uppercase field labels, history with icon circles, actions at the bottom.
+ * Lead 2026-11-24: see the details here without going back to the Staff directory.
+ */
+function AssignmentDetailsSheet({ r, onClose, onReassign }: { r: AssignmentRow; onClose: () => void; onReassign: () => void }) {
+  const c = r.current;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const past = r.history.filter((h) => !c || h.id !== c.id);
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Assignment details">
+      <button type="button" aria-label="Close details" onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-y-0 right-0 flex w-[min(380px,100vw)] flex-col bg-white shadow-2xl max-[719px]:inset-x-0 max-[719px]:top-auto max-[719px]:max-h-[85dvh] max-[719px]:w-full max-[719px]:rounded-t-2xl max-[719px]:pb-[env(safe-area-inset-bottom,0px)]">
+        <span className="mx-auto mt-2 hidden h-1 w-10 rounded-full bg-(--ap-line) max-[719px]:block" aria-hidden="true" />
+        <div className="flex items-center justify-between border-b border-(--ap-line) px-4 py-3">
+          <h2 className="m-0 text-[17px] font-extrabold">Assignment details</h2>
+          <button type="button" autoFocus onClick={onClose} className="inline-flex size-11 items-center justify-center rounded-xl hover:bg-(--ap-line-2)" aria-label="Close details">
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-5 p-4">
+            <div className="flex items-center gap-3">
+              <AdminAvatar name={r.name} size={44} />
+              <div className="min-w-0 leading-tight">
+                <b className="block truncate text-[16px]">{r.name}</b>
+                <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)">{r.reference}</span>
+              </div>
+            </div>
+            {c ? (
+              <>
+                <DetailField label="Status">
+                  <StatusChip tone="ok">Current</StatusChip>
+                </DetailField>
+                <DetailField label="Client">{c.client || "Not set"}</DetailField>
+                <DetailField label="Outlet">{c.outlet || "Not set"}</DetailField>
+                <DetailField label="Role">{c.role || "Not set"}</DetailField>
+                <DetailField label="Department">{c.department && c.department.trim() ? c.department : "Not set yet"}</DetailField>
+                <DetailField label="Start date">{c.start ? formatDate(c.start) : "Not set"}</DetailField>
+                {c.reason ? <DetailField label="Reason">{c.reason}</DetailField> : null}
+              </>
+            ) : (
+              <DetailField label="Status">
+                <StatusChip tone="warn">Awaiting assignment</StatusChip>
+              </DetailField>
+            )}
+            <div>
+              <div className="mb-2 text-[13px] font-bold tracking-wide text-(--ap-muted) uppercase">History</div>
+              {past.length === 0 ? (
+                <p className="m-0 text-[14px] text-(--ap-muted)">No earlier assignments.</p>
+              ) : (
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {past.map((h) => (
+                    <li key={h.id} className="flex gap-3">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-(--ap-tint) text-(--ap-violet)">
+                        <Clock3 className="size-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 text-[14px] leading-snug">
+                        <b className="block break-words">
+                          {h.client}, {h.outlet}
+                          {h.role ? ` · ${h.role}` : ""}
+                        </b>
+                        <span className="text-(--ap-muted)">
+                          {formatDateShort(h.start)} - {h.end ? formatDateShort(h.end) : "present"}
+                          {h.reason ? ` · ${h.reason}` : ""}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2.5 border-t border-(--ap-line) px-4 py-3">
+          <Link href={staffHref(r.staffId)} className="ap-btn ap-btn-o flex-1">
+            Full profile
+          </Link>
+          <button type="button" onClick={onReassign} className="ap-btn ap-btn-p flex-1">
+            {c ? "Reassign" : "Assign"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
