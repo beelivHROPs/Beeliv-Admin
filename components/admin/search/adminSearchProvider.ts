@@ -35,7 +35,9 @@ import { applicantHref, inboxItemHref } from "@/lib/admin/links";
 import { canOpenRoute, useAccessRole, type AdminAccessRole } from "@/lib/admin/role-access";
 import { clientIdInScope } from "@/lib/admin/scope";
 import { APPLICATION_STAGES } from "@/lib/applicant/types";
-import * as applicants from "@/lib/admin/applicants/service";
+import * as applicantsMock from "@/lib/admin/applicants/service";
+import { liveApplicantsAdapter } from "@/lib/admin/applicants/live";
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import * as vacancies from "@/lib/admin/vacancies/service";
 import * as interviews from "@/lib/admin/interviews/service";
 import * as clients from "@/lib/admin/clients/service";
@@ -211,6 +213,7 @@ function sources(): Source[] {
     {
       route: "/admin/recruitment/applicants",
       run: async () => {
+        const applicants = teamAccessMode() === "live" ? liveApplicantsAdapter : applicantsMock;
         const page = await applicants.listApplicants({ search: "", tab: "all", stage: "", vacancyId: "", clientId: "", recruiterId: "", sort: "name", page: 1, pageSize: BIG });
         return page.rows
           .filter((r) => clientIdInScope(r.clientId))
@@ -518,6 +521,9 @@ function adminBrowse(role: AdminAccessRole, pilot?: boolean) {
   return browseLinks(defs);
 }
 
+/** Search sources with REAL data on a live deployment (pages list, real applicants, rosters, attendance, leave, team). */
+const LIVE_SOURCES = new Set(["/admin", "/admin/recruitment/applicants", "/admin/workforce/leave", "/admin/workforce/attendance", "/admin/workforce/scheduling", "/admin/team-access"]);
+
 export function buildAdminSearchProvider(role: AdminAccessRole, ctx: AdminActionContext): SearchProvider {
   return {
     appId: "admin",
@@ -529,7 +535,9 @@ export function buildAdminSearchProvider(role: AdminAccessRole, ctx: AdminAction
     actions: adminActions(role, ctx),
     groups: ctx.pilot ? ADMIN_SEARCH_GROUPS.filter((g) => !(GROUP_ROUTE[g.key] && isPilotHiddenRoute(GROUP_ROUTE[g.key]))) : ADMIN_SEARCH_GROUPS,
     load: async () => {
-      const active = sources().filter((s) => canOpenRoute(role, s.route) && !(ctx.pilot && isPilotHiddenRoute(s.route)));
+      // Live (lead rule: real data or nothing): only sources backed by real data; every other source is sample-only.
+      const live = teamAccessMode() === "live";
+      const active = sources().filter((s) => canOpenRoute(role, s.route) && !(ctx.pilot && isPilotHiddenRoute(s.route)) && (!live || LIVE_SOURCES.has(s.route)));
       const settled = await Promise.allSettled(active.map((s) => s.run()));
       const ok = settled.filter((r): r is PromiseFulfilledResult<SearchEntry[]> => r.status === "fulfilled");
       if (ok.length === 0 && settled.length > 0) throw new Error("search unavailable");
