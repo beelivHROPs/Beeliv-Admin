@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { isSampleAdminRoute } from "@/lib/admin/sample-routes";
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { ComingSoonScreen } from "@/components/shared/ComingSoonScreen";
 import { HR_NAV_ITEMS, OPS_NAV_ITEMS } from "@/components/admin/nav";
 
@@ -16,7 +17,7 @@ const VACANCIES_LIVE = process.env.NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED === "tr
  */
 export function SampleDataBanner({ on, children }: { on: boolean; children?: ReactNode }) {
   const pathname = usePathname();
-  if (!on || !isSampleAdminRoute(pathname, VACANCIES_LIVE)) return <>{children}</>;
+  if (!on || !isSampleAdminRoute(pathname, VACANCIES_LIVE, teamAccessMode() === "live")) return <>{children}</>;
   const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const item = [...HR_NAV_ITEMS, ...OPS_NAV_ITEMS].filter((n) => n.href !== "/admin" && n.href !== "/admin/ops" && under(n.href)).sort((a, b) => b.href.length - a.href.length)[0];
   // Dropdown pages (e.g. Recruitment > Interviews) are titled by their own name, not the dropdown's.

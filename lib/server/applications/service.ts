@@ -14,12 +14,12 @@ const REASONS: Readonly<Record<string, ApplicationErrorCode>> = {
   no_access: "forbidden", invalid_request: "invalid_request", conflict: "conflict", stale: "stale", closed: "closed",
   rate_limited: "rate_limited", documents_missing: "documents_missing", documents_unsupported: "documents_unsupported",
   test_unavailable: "test_unavailable", screening_incomplete: "screening_incomplete", unavailable: "unavailable",
-  note_required: "note_required", invalid_transition: "invalid_transition",
+  note_required: "note_required", invalid_transition: "invalid_transition", already_scheduled: "already_scheduled", person_unavailable: "person_unavailable",
 };
 const id = (v: unknown): v is string => typeof v === "string" && UUID.test(v);
-const fail = (code: ApplicationErrorCode, extra: Partial<ApplicationFailure> = {}): ApplicationFailure => ({ ok: false, code, ...extra });
+export const fail = (code: ApplicationErrorCode, extra: Partial<ApplicationFailure> = {}): ApplicationFailure => ({ ok: false, code, ...extra });
 
-async function applicant(deps: ApplicationsDependencies): Promise<ApplicantIdentity | ApplicationFailure> {
+export async function applicant(deps: ApplicationsDependencies): Promise<ApplicantIdentity | ApplicationFailure> {
   if (!deps.enabled) return fail("unavailable");
   let who: ApplicantIdentity | null;
   try { who = await deps.verifyApplicant(); } catch { return fail("unavailable"); }
@@ -28,7 +28,7 @@ async function applicant(deps: ApplicationsDependencies): Promise<ApplicantIdent
   if (who.app !== "talent" || who.status !== "active" || !Array.isArray(who.entitlements) || !who.entitlements.includes("applicant")) return fail("forbidden");
   return who;
 }
-async function admin(deps: ApplicationsDependencies): Promise<AdminIdentity | ApplicationFailure> {
+export async function admin(deps: ApplicationsDependencies): Promise<AdminIdentity | ApplicationFailure> {
   if (!deps.enabled || !deps.adminReadsEnabled) return fail("unavailable");
   let who: AdminIdentity | null;
   try { who = await deps.verifyAdmin(); } catch { return fail("unavailable"); }
@@ -36,7 +36,7 @@ async function admin(deps: ApplicationsDependencies): Promise<AdminIdentity | Ap
   if (who.aal !== "aal2") return fail("forbidden");
   return who;
 }
-async function limited(deps: ApplicationsDependencies, uid: string): Promise<ApplicationFailure | null> {
+export async function limited(deps: ApplicationsDependencies, uid: string): Promise<ApplicationFailure | null> {
   try { await deps.consumeLimit(uid); return null; } catch (error) {
     return plain(error) && error.code === "rate_limited" ? fail("rate_limited") : fail("unavailable");
   }
@@ -45,12 +45,12 @@ function fingerprint(deps: ApplicationsDependencies, op: "open" | "save" | "subm
   try { const f = deps.fingerprint(op, command); return /^[a-f0-9]{64}$/.test(f) ? f : null; } catch { return null; }
 }
 /** Returns the reply record, a definite denial, or null when the outcome cannot be trusted. */
-function interpret(reply: RpcReply | undefined): { data: Record<string, unknown> } | ApplicationFailure | null {
+export function interpret(reply: RpcReply | undefined): { data: Record<string, unknown> } | ApplicationFailure | null {
   if (!reply || reply.error || !plain(reply.data)) return null;
   if (reply.data.ok === false) return fail(typeof reply.data.reason === "string" && REASONS[reply.data.reason] ? REASONS[reply.data.reason] : "unavailable");
   return reply.data.ok === true ? { data: reply.data } : null;
 }
-const denied = (x: { data: Record<string, unknown> } | ApplicationFailure | null): x is ApplicationFailure => !!x && "ok" in x && x.ok === false;
+export const denied = (x: { data: Record<string, unknown> } | ApplicationFailure | null): x is ApplicationFailure => !!x && "ok" in x && x.ok === false;
 
 /** Run a mutation. An untrustworthy/absent reply is `outcome_unknown` with the original requestId. */
 async function mutate<T>(requestId: string, call: () => PromiseLike<RpcReply>, build: (d: Record<string, unknown>) => T | null): Promise<ApplicationResult<{ value: T }>> {

@@ -14,7 +14,7 @@ import { TimePicker } from "@/components/admin/TimePicker";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { Disc } from "@/components/admin/overview/Disc";
 import { Exclaim } from "@/components/applicant/icons";
-import { cancelInterview, checkInterviewConflicts, rescheduleInterview, scheduleInterview } from "@/lib/admin/interviews/hooks";
+import { cancelInterview, checkInterviewConflicts, interviewsLive, rescheduleInterview, scheduleInterview } from "@/lib/admin/interviews/hooks";
 import { METHOD_LABEL, type Conflict, type InterviewDetail, type InterviewMethod, type InterviewRow, type PersonRef } from "@/lib/admin/interviews/types";
 import { NoteSheet, SHEET_BTN, Sheet } from "./ui";
 
@@ -27,6 +27,11 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const dateOf = (iso: string | null) => (iso ? `${new Date(iso).getFullYear()}-${pad(new Date(iso).getMonth() + 1)}-${pad(new Date(iso).getDate())}` : "");
 const timeOf = (iso: string | null) => (iso ? `${pad(new Date(iso).getHours())}:${pad(new Date(iso).getMinutes())}` : "");
 const isoOf = (date: string, time: string) => (date && time ? new Date(`${date}T${time}`) : null);
+/** Live: Beeliv works in Lagos time (UTC+1 all year), whatever the browser's own time zone. */
+const LAGOS = 3_600_000;
+const lagosDateOf = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() + LAGOS).toISOString().slice(0, 10) : "");
+const lagosTimeOf = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() + LAGOS).toISOString().slice(11, 16) : "");
+const lagosIsoOf = (date: string, time: string) => (date && time ? new Date(`${date}T${time}:00+01:00`) : null);
 
 export function InterviewDialogs({
   intent,
@@ -60,7 +65,7 @@ function CancelFlow({ row, onClose, onSaved, onFailed }: { row: InterviewRow; on
       busy={busy}
       onCancel={onClose}
       onSubmit={async (reason) => {
-        const ok = await confirmAction({ tone: "danger", title: "Cancel this interview?", description: "The candidate stays at this stage until you reschedule or close it. Your reason is written to the history.", confirmLabel: "Cancel interview", cancelLabel: "Keep interview" });
+        const ok = await confirmAction({ tone: "danger", title: "Cancel this interview?", description: interviewsLive() ? "The candidate goes back to Shortlisted so a new time can be booked. Your reason is written to the history." : "The candidate stays at this stage until you reschedule or close it. Your reason is written to the history.", confirmLabel: "Cancel interview", cancelLabel: "Keep interview" });
         if (!ok) return;
         setBusy(true);
         try {
@@ -79,12 +84,14 @@ function CancelFlow({ row, onClose, onSaved, onFailed }: { row: InterviewRow; on
 function ScheduleForm({ intent, interviewers, schedulable, onClose, onSaved, onFailed }: { intent: Intent; interviewers: PersonRef[]; schedulable: { id: string; label: string; defaults: InterviewRow["defaults"] }[]; onClose: () => void; onSaved: (d: InterviewDetail, t: string) => void; onFailed: (t: string) => void }) {
   const resched = intent.kind === "reschedule";
   const cur = intent.row;
+  const live = interviewsLive();
   const [targetId, setTargetId] = useState(cur?.id ?? "");
-  const [date, setDate] = useState(dateOf(cur?.at ?? null));
-  const [time, setTime] = useState(timeOf(cur?.at ?? null));
+  const [date, setDate] = useState((live ? lagosDateOf : dateOf)(cur?.at ?? null));
+  const [time, setTime] = useState((live ? lagosTimeOf : timeOf)(cur?.at ?? null));
   // Length and method start from the stage's usual values in the vacancy's journey (when it has this stage).
   const [duration, setDuration] = useState(String(cur?.defaults && cur.status === "to-schedule" ? cur.defaults.minutes : (cur?.durationMins ?? 45)));
   const [interviewerId, setInterviewerId] = useState(cur?.interviewer?.id ?? "");
+  const [interviewerName, setInterviewerName] = useState(cur?.interviewer?.name ?? "");
   const [method, setMethod] = useState<InterviewMethod | "">(cur?.method ?? cur?.defaults?.method ?? "");
   const [location, setLocation] = useState(cur?.location ?? "");
   const [link, setLink] = useState(cur?.link ?? "");
@@ -95,14 +102,14 @@ function ScheduleForm({ intent, interviewers, schedulable, onClose, onSaved, onF
   const uid = useId();
   const [openedAt] = useState(() => Date.now());
 
-  const when = isoOf(date, time);
+  const when = (live ? lagosIsoOf : isoOf)(date, time);
   const whenIso = when && !Number.isNaN(when.getTime()) ? when.toISOString() : null;
   const errors: Record<string, string> = {};
   if (!targetId) errors.target = "Choose the candidate and stage.";
   if (!date) errors.date = "Choose a date.";
   if (!time) errors.time = "Choose a time.";
   if (whenIso && new Date(whenIso).getTime() < openedAt) errors.date = "The interview must be in the future.";
-  if (!interviewerId) errors.interviewer = "Choose an interviewer.";
+  if (!live && !interviewerId) errors.interviewer = "Choose an interviewer.";
   if (!method) errors.method = "Choose how it will be held.";
   if (method === "in-person" && !location.trim()) errors.location = "Add the place.";
   // Optional. When given: https only, plain text, at most 300 characters.
@@ -129,7 +136,7 @@ function ScheduleForm({ intent, interviewers, schedulable, onClose, onSaved, onF
     setTried(true);
     if (invalid || !whenIso || !method) return;
     setBusy(true);
-    const input = { at: whenIso, durationMins: Number(duration), interviewerId, method, location: location.trim(), link: link.trim(), reason: reason.trim() };
+    const input = { at: whenIso, durationMins: Number(duration), interviewerId, interviewerName: interviewerName.trim(), method, location: location.trim(), link: link.trim(), reason: reason.trim() };
     const row = cur ?? null;
     try {
       const d = resched ? await rescheduleInterview(targetId, input) : await scheduleInterview(targetId, input);
@@ -147,7 +154,7 @@ function ScheduleForm({ intent, interviewers, schedulable, onClose, onSaved, onF
   return (
     <Sheet
       title={resched ? `Reschedule ${cur?.candidateName ?? "interview"}` : "Schedule interview"}
-      description={resched ? "Pick the new time. A reason is required and is added to the history." : "Set the time, interviewer and place. The candidate is notified once the backend is connected."}
+      description={resched ? "Pick the new time. A reason is required and is added to the history." : live ? "Set the time (Lagos time) and place. The candidate sees it on their Interviews page." : "Set the time, interviewer and place. The candidate is notified once the backend is connected."}
       busy={busy}
       onClose={onClose}
       wide
@@ -208,8 +215,19 @@ function ScheduleForm({ intent, interviewers, schedulable, onClose, onSaved, onF
         </div>
         <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
           <div>
-            <span className={label}>Interviewer</span>
-            <SelectMenu label="Interviewer" placeholder="Choose an interviewer" value={interviewerId} onChange={setInterviewerId} options={interviewers.map((p) => ({ value: p.id, label: p.name }))} invalid={!!show("interviewer")} />
+            {live ? (
+              <>
+                <label htmlFor={`${uid}-i`} className={label}>
+                  Interviewer <span className="font-normal text-(--ap-muted)">(optional)</span>
+                </label>
+                <input id={`${uid}-i`} className="ap-input" value={interviewerName} maxLength={120} onChange={(e) => setInterviewerName(e.target.value)} placeholder="Name" autoComplete="off" />
+              </>
+            ) : (
+              <>
+                <span className={label}>Interviewer</span>
+                <SelectMenu label="Interviewer" placeholder="Choose an interviewer" value={interviewerId} onChange={setInterviewerId} options={interviewers.map((p) => ({ value: p.id, label: p.name }))} invalid={!!show("interviewer")} />
+              </>
+            )}
             {err("interviewer")}
           </div>
           <div>

@@ -21,7 +21,7 @@ import { RowMenu, type RowMenuItem } from "@/components/admin/overview/RowMenu";
 import { Initials } from "@/components/admin/overview/Sections";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { applicantHref } from "@/lib/admin/links";
-import { useInterviews } from "@/lib/admin/interviews/hooks";
+import { interviewsLive, useInterviews } from "@/lib/admin/interviews/hooks";
 import { INTERVIEW_SORTS, METHOD_LABEL, type InterviewRow, type InterviewsPage, type InterviewsQuery, type InterviewTab } from "@/lib/admin/interviews/types";
 import { InterviewDialogs, type Intent } from "./InterviewDialogs";
 import { addDays, InterviewWeek, mondayOf, weekRange } from "./InterviewWeek";
@@ -106,8 +106,8 @@ export function InterviewsList() {
             title="No interviews yet"
             description="When a shortlisted applicant reaches an interview stage, it shows here to schedule and score."
             action={
-              <Link href="/admin/recruitment/shortlisting" className="ap-btn ap-btn-s ap-btn-sm">
-                Go to Shortlisting
+              <Link href={interviewsLive() ? "/admin/recruitment/applicants" : "/admin/recruitment/shortlisting"} className="ap-btn ap-btn-s ap-btn-sm">
+                {interviewsLive() ? "Go to Applicants" : "Go to Shortlisting"}
               </Link>
             }
           />
@@ -119,11 +119,15 @@ export function InterviewsList() {
 
   const refreshing = live.status === "loading";
   const interviewers = page.facets.interviewers;
+  // Live: the server says whether this account may change interviews (canManage); a cancelled interview is not
+  // rescheduled there (the applicant goes back to "To schedule" and gets a new booking).
+  const liveMode = interviewsLive();
+  const canManage = page.canManage !== false;
   const menuFor = (r: InterviewRow) => {
     const items: RowMenuItem[] = [{ label: "View interview", href: `/admin/recruitment/interviews/${r.id}` }, { label: "View applicant", href: applicantHref(r.applicantId) }];
-    if (r.status === "to-schedule") items.push({ label: "Schedule", onSelect: () => setIntent({ kind: "schedule", row: r }) });
-    if (r.status === "scheduled" || r.status === "cancelled") items.push({ label: "Reschedule", onSelect: () => setIntent({ kind: "reschedule", row: r }) });
-    if (r.status === "scheduled") items.push({ label: "Cancel interview", tone: "danger", onSelect: () => setIntent({ kind: "cancel", row: r }) });
+    if (canManage && r.status === "to-schedule") items.push({ label: "Schedule", onSelect: () => setIntent({ kind: "schedule", row: r }) });
+    if (canManage && (r.status === "scheduled" || (!liveMode && r.status === "cancelled"))) items.push({ label: "Reschedule", onSelect: () => setIntent({ kind: "reschedule", row: r }) });
+    if (canManage && r.status === "scheduled") items.push({ label: "Cancel interview", tone: "danger", onSelect: () => setIntent({ kind: "cancel", row: r }) });
     return <RowMenu label={`Actions for ${r.candidateName}, ${r.stageName}`} items={items} />;
   };
 
@@ -132,7 +136,7 @@ export function InterviewsList() {
       <PageHeading
         title="Interviews"
         right={
-          <button type="button" onClick={() => setIntent({ kind: "schedule", row: null })} disabled={page.schedulable.length === 0} title={page.schedulable.length === 0 ? "No one is waiting to be scheduled" : undefined} className="ap-btn ap-btn-p h-11 text-white!">
+          page.canManage === false ? undefined : <button type="button" onClick={() => setIntent({ kind: "schedule", row: null })} disabled={page.schedulable.length === 0} title={page.schedulable.length === 0 ? "No one is waiting to be scheduled" : undefined} className="ap-btn ap-btn-p h-11 text-white!">
             <Plus className="size-4" aria-hidden="true" /> Schedule interview
           </button>
         }

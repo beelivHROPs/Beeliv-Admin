@@ -1,6 +1,7 @@
 "use client";
 
 /** Tab panels for Applicant 360 (spec 28.2): Overview, Application, CV & Documents, Screening, Interviews, Assessments, Notes, Activity. */
+import Link from "next/link";
 import { InfoHint } from "@/components/admin/standard";
 import { SensitiveNote, SensitiveValue } from "@/components/admin/SensitiveValue";
 import { useState, type ReactNode } from "react";
@@ -221,7 +222,13 @@ export function InterviewsPanel({ a, kind }: { a: ApplicantDetail; kind: "interv
           {rows.map((i) => (
             <li key={i.id} className="rounded-xl bg-(--ap-tint-soft) px-4 py-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <b className="text-[15px]">{i.title}</b>
+                {i.href ? (
+                  <Link href={i.href} className="text-[15px] font-bold text-(--ap-violet) hover:text-(--ap-plum)">
+                    {i.title}
+                  </Link>
+                ) : (
+                  <b className="text-[15px]">{i.title}</b>
+                )}
                 <Chip tone={i.state === "completed" ? "ok" : i.state === "scheduled" ? "info" : "mute"}>{IV_STATE[i.state]}</Chip>
               </div>
               <p className="mt-1.5 text-[15px] text-(--ap-ink-2)">

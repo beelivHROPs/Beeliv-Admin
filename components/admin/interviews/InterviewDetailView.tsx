@@ -24,14 +24,13 @@ import { applicantHref } from "@/lib/admin/links";
 import { saveInterviewScorecard, useInterview } from "@/lib/admin/interviews/hooks";
 import { useCan } from "@/lib/admin/role-access";
 import { SCORER_LABEL } from "@/lib/journeys/types";
-import { METHOD_LABEL, RECOMMENDATION_LABEL, type InterviewDetail, type InterviewRecommendation } from "@/lib/admin/interviews/types";
+import { METHOD_LABEL, OUTCOME_LABEL, PREVIEW_RECOMMENDATIONS, RECOMMENDATION_LABEL, type InterviewDetail, type InterviewOutcome, type InterviewRecommendation } from "@/lib/admin/interviews/types";
 import { StatusChip } from "@/components/client/StatusChip";
 import { StarRating } from "@/components/shared/StarRating";
 import { COVER_ROUND, PD_CTA, PhoneAction, PhoneDetailHead, PhoneFacts, PhoneMore, PhoneStickyAction, initialsOf } from "@/components/admin/PhoneDetail";
 import { InterviewDialogs, type Intent } from "./InterviewDialogs";
 import { InterviewStatusChip, InterviewStatusPill, NoticeBanner, RestrictedPanel, type Notice } from "./ui";
 
-const RECS = Object.keys(RECOMMENDATION_LABEL) as InterviewRecommendation[];
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const H2 = "ap-serif mb-3 text-[18px] leading-tight";
 
@@ -73,7 +72,8 @@ export function InterviewDetailView({ id }: { id: string }) {
   if (!d) return <DetailSkeleton />;
   const c = d.capabilities;
   // Scoring controls are hidden (never greyed) for roles that may not score this stage.
-  const canScore = c.canScore && mayScoreCap;
+  // Live: the server already decided (canManage + client scope); no client-side role check on top.
+  const canScore = c.canScore && (d.liveResult ? true : mayScoreCap);
   // Phones: Reschedule (or Join) is an outline action and the scorecard / Schedule is the sticky button; the rest sits in the cover's More menu.
   const phoneMenu = [
     ...(c.canSchedule && canScore ? [{ label: "Schedule interview", onSelect: () => setIntent({ kind: "schedule", row: d }) }] : []),
@@ -200,9 +200,11 @@ export function InterviewDetailView({ id }: { id: string }) {
             </PhoneMore>
           </div>
           <aside className="flex flex-col gap-4 @min-[1000px]:order-2 @min-[1000px]:sticky @min-[1000px]:top-24">
-            <PhoneMore title="Pathway">
-              <Pathway d={d} />
-            </PhoneMore>
+            {d.pathway.length ? (
+              <PhoneMore title="Pathway">
+                <Pathway d={d} />
+              </PhoneMore>
+            ) : null}
           </aside>
         </div>
       </div>
@@ -216,8 +218,10 @@ export function InterviewDetailView({ id }: { id: string }) {
           onClose={() => setIntent(null)}
           onSaved={(next, text, sound) => {
             setIntent(null);
-            live.setData(next);
             setNotice({ kind: "ok", text, sound });
+            // Live: scheduling a "To schedule" record creates the interview under its own id.
+            if (next.id !== d.id) router.replace(`/admin/recruitment/interviews/${next.id}`);
+            else live.setData(next);
           }}
           onFailed={(text) => {
             setIntent(null);
@@ -235,6 +239,12 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
   const [ratings, setRatings] = useState<Record<string, number>>(d.scorecard.ratings);
   const [notes, setNotes] = useState(d.scorecard.notes);
   const [rec, setRec] = useState<InterviewRecommendation | null>(d.scorecard.recommendation);
+  const [outcome, setOutcome] = useState<InterviewOutcome | null>(d.liveResult?.outcome ?? null);
+  const liveResult = d.liveResult ?? null;
+  const recs = liveResult?.recommendations ?? PREVIEW_RECOMMENDATIONS;
+  // Live: Passed / Not passed is required, and a reason is required when Not passed.
+  const outcomeMissing = !!liveResult && !outcome;
+  const reasonMissing = !!liveResult && outcome === "not_passed" && !notes.trim();
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
 
@@ -242,14 +252,14 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
   // Guide total only: rating x weight over the stage's criteria. It decides nothing.
   const total = d.criteria.reduce((a, c) => a + (ratings[c.id] ?? 0) * c.weight, 0);
   const maxTotal = d.criteria.reduce((a, c) => a + c.scale * c.weight, 0);
-  const missing = rated < d.criteria.length || !rec;
+  const missing = rated < d.criteria.length || !rec || outcomeMissing || reasonMissing;
 
   async function save() {
     setTried(true);
     if (missing || !rec) return;
     setBusy(true);
     try {
-      onSaved(await saveInterviewScorecard(d.id, { ratings, notes: notes.trim(), recommendation: rec }));
+      onSaved(await saveInterviewScorecard(d.id, { ratings, notes: notes.trim(), recommendation: rec, ...(outcome ? { outcome } : {}) }));
     } catch {
       onFailed();
     } finally {
@@ -257,6 +267,7 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
     }
   }
 
+  if (!editable && liveResult && d.status === "completed") return <LiveResultView d={d} />;
   if (!editable) {
     return (
       <section className={CARD} aria-labelledby="sc-h">
@@ -268,7 +279,9 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
             ? "This interview was cancelled, so there is nothing to score."
             : d.status === "to-schedule"
               ? "The scorecard opens once the interview is scheduled."
-              : `Scoring for this stage is done by ${d.whoMayScore.map((r) => SCORER_LABEL[r]).join(", ") || "no one"}.`}
+              : liveResult
+                ? "Your account can view this interview. Recording the result is done by HR for this client."
+                : `Scoring for this stage is done by ${d.whoMayScore.map((r) => SCORER_LABEL[r]).join(", ") || "no one"}.`}
         </p>
       </section>
     );
@@ -313,7 +326,7 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
       </p>
 
       <label htmlFor="sc-notes" className="mt-5 block text-[14px] font-semibold text-(--ap-ink-2)">
-        Interviewer notes
+        Interviewer notes{liveResult && outcome === "not_passed" ? " (required when Not passed)" : ""}
       </label>
       <textarea id="sc-notes" className="ap-input mt-1.5" rows={4} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
 
@@ -321,7 +334,7 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
         Recommendation
       </p>
       <div role="radiogroup" aria-labelledby="sc-rec" className="mt-1.5 grid grid-cols-1 gap-2 min-[560px]:grid-cols-2">
-        {RECS.map((r) => {
+        {recs.map((r) => {
           const on = rec === r;
           return (
             <button key={r} type="button" role="radio" aria-checked={on} onClick={() => setRec(r)} className={`flex h-12 items-center gap-2.5 rounded-xl border px-3.5 text-left text-[15px] font-bold transition-colors ${on ? "border-(--ap-violet) bg-(--ap-tint) text-(--ap-violet)" : "border-(--ap-line) text-(--ap-ink-2) hover:bg-(--ap-tint-soft)"}`}>
@@ -332,11 +345,33 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
         })}
       </div>
       {tried && !rec ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Choose a recommendation.</p> : null}
-      <p className="mt-3 text-[13px] leading-snug text-(--ap-muted)">A recommendation to proceed does not select the candidate. Final approval belongs to Operations; HR submits for approval from the applicant record.</p>
+      {liveResult ? (
+        <>
+          <p id="sc-out" className="mt-5 text-[14px] font-semibold text-(--ap-ink-2)">
+            Result
+          </p>
+          <div role="radiogroup" aria-labelledby="sc-out" className="mt-1.5 grid grid-cols-1 gap-2 min-[560px]:grid-cols-2">
+            {(Object.keys(OUTCOME_LABEL) as InterviewOutcome[]).map((o) => {
+              const on = outcome === o;
+              return (
+                <button key={o} type="button" role="radio" aria-checked={on} onClick={() => setOutcome(o)} className={`flex h-12 items-center gap-2.5 rounded-xl border px-3.5 text-left text-[15px] font-bold transition-colors ${on ? "border-(--ap-violet) bg-(--ap-tint) text-(--ap-violet)" : "border-(--ap-line) text-(--ap-ink-2) hover:bg-(--ap-tint-soft)"}`}>
+                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${on ? "border-(--ap-violet) bg-(--ap-violet) text-white" : "border-(--ap-faint)"}`}>{on ? <Check className="size-3.5" aria-hidden="true" /> : null}</span>
+                  {OUTCOME_LABEL[o]}
+                </button>
+              );
+            })}
+          </div>
+          {tried && outcomeMissing ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Choose Passed or Not passed.</p> : null}
+          {tried && reasonMissing ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Add a short reason in the notes.</p> : null}
+          <p className="mt-3 text-[13px] leading-snug text-(--ap-muted)">Passed moves the applicant to Documentation. Not passed closes the application; the record and history are kept. The applicant never sees scores or notes.</p>
+        </>
+      ) : (
+        <p className="mt-3 text-[13px] leading-snug text-(--ap-muted)">A recommendation to proceed does not select the candidate. Final approval belongs to Operations; HR submits for approval from the applicant record.</p>
+      )}
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" disabled={busy} onClick={() => void save()} className="ap-btn ap-btn-p h-12 px-6 text-white! max-[600px]:w-full">
-          {busy ? "Saving..." : d.scorecard.submittedAt ? "Update scorecard" : "Save scorecard"}
+          {busy ? "Saving..." : liveResult ? "Save result" : d.scorecard.submittedAt ? "Update scorecard" : "Save scorecard"}
         </button>
         {d.scorecard.submittedAt && d.scorecard.submittedBy ? (
           <span className="text-[13px] text-(--ap-muted)">
@@ -344,6 +379,47 @@ function Scorecard({ d, editable, onSaved, onFailed }: { d: InterviewDetail; edi
           </span>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+/** Live, completed: the recorded result, read only (a completed interview cannot be re-scored). */
+function LiveResultView({ d }: { d: InterviewDetail }) {
+  const total = d.criteria.reduce((a, c) => a + (d.scorecard.ratings[c.id] ?? 0), 0);
+  const outcome = d.liveResult?.outcome ?? null;
+  return (
+    <section className={CARD} aria-labelledby="sc-h">
+      <h2 id="sc-h" className={H2}>
+        Scorecard
+      </h2>
+      <ul className="m-0 flex list-none flex-col gap-3 p-0">
+        {d.criteria.map((c) => (
+          <li key={c.id} className="flex flex-col gap-1 border-b border-(--ap-line-2) pb-3 last:border-b-0 last:pb-0 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between">
+            <p className="text-[15px] font-bold">{c.label}</p>
+            <StarRating label={c.label} scale={c.scale} value={d.scorecard.ratings[c.id] ?? null} readOnly />
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-[15px] font-semibold tabular-nums">
+        Total (guide only): {total} of {d.criteria.length * 5}
+      </p>
+      <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[15px]">
+        <dt className="text-(--ap-muted)">Recommendation</dt>
+        <dd className="m-0 font-semibold">{d.scorecard.recommendation ? RECOMMENDATION_LABEL[d.scorecard.recommendation] : "Not recorded"}</dd>
+        <dt className="text-(--ap-muted)">Result</dt>
+        <dd className="m-0 font-semibold">{outcome ? OUTCOME_LABEL[outcome] : "Not recorded"}</dd>
+        {d.scorecard.notes ? (
+          <>
+            <dt className="text-(--ap-muted)">Notes</dt>
+            <dd className="m-0 whitespace-pre-wrap break-words">{d.scorecard.notes}</dd>
+          </>
+        ) : null}
+      </dl>
+      {d.scorecard.submittedAt ? (
+        <p className="mt-3 text-[13px] text-(--ap-muted)">
+          Recorded <RelativeTime iso={d.scorecard.submittedAt} />
+        </p>
+      ) : null}
     </section>
   );
 }

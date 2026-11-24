@@ -114,9 +114,13 @@ export interface ApplicantCapabilities {
   canAddNote: boolean;
   /** Move a person who is not selected (not shortlisted or rejected / on hold) into the Talent Pool. False once they are already there. */
   canMoveToTalentPool: boolean;
+  /** Live: shortlisted with no interview booked, and the server allows this account to manage it (opens the schedule dialog). */
+  canScheduleInterview?: boolean;
+  /** Live: interview passed (Documentation); HR marks the documents verified, which sends it to the Head of Operations. */
+  canVerifyDocuments?: boolean;
 }
 
-export type RecruitmentAction = "shortlist" | "hold" | "reject" | "request-info" | "submit-for-approval" | "approve-selection" | "talent-pool";
+export type RecruitmentAction = "shortlist" | "hold" | "reject" | "request-info" | "submit-for-approval" | "approve-selection" | "talent-pool" | "verify-documents";
 
 /** Authorised-only fields: the adapter says whether this user may see the value. */
 export type Authorized<T> = { allowed: true; value: T } | { allowed: false };
@@ -203,6 +207,8 @@ export interface InterviewRecord {
   state: "scheduled" | "completed" | "cancelled" | "not-scheduled";
   /** Scores / interviewer notes are HR + Ops only (data-visibility-matrix). Null until recorded. */
   recommendation: string | null;
+  /** Live: link to the interview record. */
+  href?: string;
 }
 
 export interface InternalNote {
@@ -244,6 +250,8 @@ export interface ApplicantDetail extends ApplicantRow {
   /** The complete submitted application, grouped by section. */
   submission: ApplicationSubmission;
   interviews: InterviewRecord[];
+  /** Live, right after the Head of Operations approved: the new staff record (HR then uses "Invite to Staff app" there). */
+  staffRecord?: { id: string; reference: string } | null;
   notes: InternalNote[];
   activity: ActivityRecord[];
 }

@@ -35,7 +35,25 @@ export type InterviewMethod = "in-person" | "video" | "phone";
 export type InterviewStatus = "to-schedule" | "scheduled" | "completed" | "cancelled";
 
 /** Human recommendation (spec 6.4). Not derived from the score. */
-export type InterviewRecommendation = "proceed" | "hold" | "reject" | "another-stage";
+export type InterviewRecommendation = "proceed" | "hold" | "reject" | "another-stage" | "strongly_recommend" | "recommend" | "not_recommended";
+
+/** Live result (recruitment-interviews-phase2.sql): Passed moves the applicant to Documentation; Not passed ends the application (reason required). */
+export type InterviewOutcome = "passed" | "not_passed";
+export const OUTCOME_LABEL: Record<InterviewOutcome, string> = { passed: "Passed", not_passed: "Not passed" };
+
+/** The preview recommendation choices (the live interview sends its own list in `liveResult`). */
+export const PREVIEW_RECOMMENDATIONS: InterviewRecommendation[] = ["proceed", "hold", "reject", "another-stage"];
+
+/**
+ * Present only on LIVE interviews. Capabilities then come from the server (canManage), never from a client role check;
+ * the result has fixed recommendation choices and a required Passed / Not passed outcome.
+ */
+export interface LiveInterviewResult {
+  recommendations: InterviewRecommendation[];
+  outcome: InterviewOutcome | null;
+  /** Optimistic-concurrency token for the next write. */
+  revision: number;
+}
 
 export interface ScoringCriterion {
   id: string;
@@ -119,6 +137,7 @@ export interface InterviewDetail extends InterviewRow {
   pathway: { stageId: string; stageName: string; state: InterviewStatus | "not-required"; at: ISODateTime | null }[];
   history: InterviewHistoryEntry[];
   capabilities: InterviewCapabilities;
+  liveResult?: LiveInterviewResult;
 }
 
 export type InterviewTab = "all" | "to-schedule" | "upcoming" | "needs-outcome" | "completed";
@@ -157,12 +176,16 @@ export interface InterviewsPage {
   schedulable: { id: string; label: string; defaults: InterviewRow["defaults"] }[];
   /** True when there are no interviews at all (distinct from "no matches"). */
   workspaceEmpty: boolean;
+  /** Live only: false when this account may view but not schedule, cancel or record (server canManage). */
+  canManage?: boolean;
 }
 
 export interface ScheduleInput {
   at: ISODateTime;
   durationMins: number;
   interviewerId: string;
+  /** Live only: the interviewer as free text (the live record stores a name, not a person). */
+  interviewerName?: string;
   method: InterviewMethod;
   /** Required for in-person. */
   location: string;
@@ -191,6 +214,8 @@ export interface SaveScorecardInput {
   ratings: Record<string, number>;
   notes: string;
   recommendation: InterviewRecommendation;
+  /** Live only: required there. */
+  outcome?: InterviewOutcome;
 }
 
 export const RECOMMENDATION_LABEL: Record<InterviewRecommendation, string> = {
@@ -198,6 +223,9 @@ export const RECOMMENDATION_LABEL: Record<InterviewRecommendation, string> = {
   hold: "Hold",
   reject: "Reject",
   "another-stage": "Needs another stage",
+  strongly_recommend: "Strongly recommend",
+  recommend: "Recommend",
+  not_recommended: "Not recommended",
 };
 
 export const METHOD_LABEL: Record<InterviewMethod, string> = { "in-person": "In person", video: "Video call", phone: "Phone call" };
