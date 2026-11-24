@@ -61,3 +61,11 @@ export function useApplicant(id: string): Live<ApplicantDetail> {
 
 export const performApplicantAction = service.performAction;
 export const addApplicantNote = service.addNote;
+
+/** Writes follow the same live/preview choice as the reads (live: the real recruitment actions; preview: the fixture). */
+export function useApplicantWrites(): { perform: typeof service.performAction; addNote: typeof service.addNote } {
+  const live = useAuthLive();
+  return live
+    ? { perform: (id, input) => liveApplicantsAdapter.performAction(id, input), addNote: (id, body) => liveApplicantsAdapter.addNote(id, body) }
+    : { perform: service.performAction, addNote: service.addNote };
+}

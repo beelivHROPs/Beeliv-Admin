@@ -154,6 +154,9 @@ const REC: Record<InterviewRecommendation, { tone: ChipTone; label: string }> = 
   hold: { tone: "warn", label: "Hold" },
   reject: { tone: "bad", label: "Reject" },
   "another-stage": { tone: "plum", label: "Another stage" },
+  strongly_recommend: { tone: "ok", label: "Strongly recommend" },
+  recommend: { tone: "info", label: "Recommend" },
+  not_recommended: { tone: "bad", label: "Not recommended" },
 };
 export function RecommendationChip({ rec }: { rec: InterviewRecommendation | null }) {
   if (!rec) return <span className="text-[14px] text-(--ap-muted)">Not recorded</span>;

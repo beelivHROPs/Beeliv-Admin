@@ -66,3 +66,5 @@ export const scheduleInterview = service.scheduleInterview;
 export const rescheduleInterview = service.rescheduleInterview;
 export const cancelInterview = service.cancelInterview;
 export const saveInterviewScorecard = service.saveScorecard;
+/** True on live deployments: screens adjust to the live record (free-text interviewer, six-point result, server capabilities). */
+export const interviewsLive = service.interviewsLive;

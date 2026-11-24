@@ -26,7 +26,8 @@ const HOMES = ["/admin", "/admin/ops"] as const;
 const clean = (p: string): string => p.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
 const under = (path: string, prefix: string): boolean => path === prefix || path.startsWith(`${prefix}/`);
 
-export function isSampleAdminRoute(pathname: string, vacanciesLive = false): boolean {
+/** `interviewsLive`: the Interviews screens read real interviews (lib/admin/interviews/live.ts, recruitment-interviews-phase2.sql). */
+export function isSampleAdminRoute(pathname: string, vacanciesLive = false, interviewsLive = false): boolean {
   const path = clean(pathname);
   if (!under(path, "/admin")) return false;
   if ((HOMES as readonly string[]).includes(path)) return false;
@@ -35,5 +36,7 @@ export function isSampleAdminRoute(pathname: string, vacanciesLive = false): boo
   if (under(path, "/admin/clients") && !under(path, "/admin/clients/requests")) return false;
   // The Jobs page (/admin/jobs) is the vacancy list: real once the vacancies backend is on, Coming soon before that.
   if (vacanciesLive && (under(path, "/admin/recruitment/vacancies") || under(path, "/admin/jobs"))) return false;
+  // Interviews: real (or their approved empty state) once the live adapter is in use, Coming soon otherwise.
+  if (interviewsLive && under(path, "/admin/recruitment/interviews")) return false;
   return true;
 }

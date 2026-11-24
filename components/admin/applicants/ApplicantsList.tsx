@@ -19,7 +19,7 @@ import { ShowMore } from "@/components/admin/ShowMore";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { formatDateTime } from "@/lib/admin/sort";
 import { applicantHref } from "@/lib/admin/links";
-import { resolveStageParam, STAGE_TABS } from "@/lib/admin/applicants/filters";import { performApplicantAction, useApplicantsList } from "@/lib/admin/applicants/hooks";
+import { resolveStageParam, STAGE_TABS } from "@/lib/admin/applicants/filters";import { useApplicantWrites, useApplicantsList } from "@/lib/admin/applicants/hooks";
 import { confirmAction } from "@/components/applicant/ConfirmDialog";
 import { RowMenu } from "@/components/admin/overview/RowMenu";
 import { APPLICANT_SORTS, type ApplicantRow, type ApplicantsPage, type ApplicantsQuery } from "@/lib/admin/applicants/types";
@@ -49,6 +49,7 @@ export function ApplicantsList() {
   };
 
   const live = useApplicantsList(query);
+  const writes = useApplicantWrites();
   // Keep showing the previous results while a new filter loads (no skeleton flash).
   const [shown, setShown] = useState<ApplicantsPage | null>(null);
   if (live.data && live.data !== shown) setShown(live.data);
@@ -113,7 +114,7 @@ export function ApplicantsList() {
       points: [`Source vacancy: ${r.vacancy}`, "The move is written to their activity history."],
       confirmLabel: "Move to Talent Pool",
       onConfirm: async () => {
-        await performApplicantAction(r.id, { action: "talent-pool" });
+        await writes.perform(r.id, { action: "talent-pool" });
         live.retry();
       },
     });

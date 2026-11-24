@@ -34,11 +34,11 @@ export function NotificationsBody() {
         <PageHeading title="Notifications" />
       </div>
       {status === "loading" ? (
-        <div className="mx-auto w-full max-w-[720px]">
+        <div className="w-full">
           <NotificationSkeleton />
         </div>
       ) : status === "error" || status === "restricted" ? (
-        <div className="mx-auto w-full max-w-[720px]">
+        <div className="w-full">
           <NotificationError onRetry={retry} restricted={status === "restricted"} />
         </div>
       ) : (

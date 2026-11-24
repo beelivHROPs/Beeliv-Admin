@@ -23,7 +23,9 @@ import { CARD } from "@/components/applicant/SectionCard";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { playAdminSound } from "@/lib/admin/sound";
 import { formatDateShort } from "@/lib/applicant/time";
-import { addApplicantNote, performApplicantAction, useApplicant } from "@/lib/admin/applicants/hooks";
+import { useApplicant, useApplicantWrites } from "@/lib/admin/applicants/hooks";
+import { InterviewDialogs } from "@/components/admin/interviews/InterviewDialogs";
+import type { InterviewRow } from "@/lib/admin/interviews/types";
 import type { ApplicantDetail, RecruitmentAction } from "@/lib/admin/applicants/types";
 import { NoteSheet, type NoteSheetConfig } from "./NoteSheet";
 import { ActivityPanel, ApplicationPanel, DocumentsPanel, InterviewsPanel, NotesPanel, OverviewPanel, ScreeningPanel } from "./Panels";
@@ -51,6 +53,18 @@ const SHEETS: Partial<Record<RecruitmentAction, NoteSheetConfig>> = {
   "talent-pool": { title: "Move to Talent Pool", description: "They stay on record and can be matched to future roles. Their application and history are kept. The vacancy they applied for is saved as the source.", label: "Note (optional)", confirmLabel: "Move to Talent Pool", tone: "neutral", noteOptional: true },
   "request-info": { title: "Request more information", description: "Describe what is needed from the applicant.", label: "What do you need?", confirmLabel: "Send request", tone: "neutral" },
 };
+/** Head of Operations declining a selection (stage 4). The reason is required and kept in the history. */
+const DECLINE_SHEET: NoteSheetConfig = { title: "Decline this selection", description: "The application closes as not selected. The record and history are kept. A reason is required.", label: "Reason for declining", confirmLabel: "Decline", tone: "danger" };
+const sheetFor = (action: RecruitmentAction, a: ApplicantDetail | null): NoteSheetConfig | undefined => (action === "reject" && a?.capabilities.canApproveSelection ? DECLINE_SHEET : SHEETS[action]);
+
+/** The schedule dialog's subject for a shortlisted applicant with no interview yet (live key "<applicationId>.new"). */
+function scheduleRowOf(a: ApplicantDetail): InterviewRow {
+  return {
+    id: `${a.id}.new`, applicantId: a.id, candidateName: a.name, vacancyId: a.vacancyId, vacancy: a.vacancy, client: a.client, stageId: "interview", stageName: "Interview",
+    at: null, durationMins: 45, interviewer: null, method: null, location: null, link: null, defaults: null, status: "to-schedule",
+    totalScore: null, maxScore: null, recommendation: null, nextAction: null, needsAttention: false,
+  };
+}
 
 export function ApplicantDetailView({ id }: { id: string }) {
   const live = useApplicant(id);
@@ -58,6 +72,8 @@ export function ApplicantDetailView({ id }: { id: string }) {
   const [sheet, setSheet] = useState<RecruitmentAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const writes = useApplicantWrites();
   const tabId = useId();
 
   if (live.status === "error" || live.status === "restricted") {
@@ -88,7 +104,7 @@ export function ApplicantDetailView({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
-      live.setData(await performApplicantAction(id, { action, note }));
+      live.setData(await writes.perform(id, { action, note }));
       // Sound only after the adapter confirmed (the page already shows the new stage).
       playAdminSound(action === "shortlist" || action === "submit-for-approval" || action === "approve-selection" ? "approved" : action === "reject" ? "rejected" : "saved");
       return true;
@@ -101,9 +117,19 @@ export function ApplicantDetailView({ id }: { id: string }) {
   }
 
   async function onAction(action: RecruitmentAction) {
-    if (SHEETS[action]) {
+    if (sheetFor(action, a)) {
       setError(null);
       setSheet(action);
+      return;
+    }
+    if (action === "verify-documents") {
+      const ok = await confirmAction({
+        tone: "neutral",
+        title: "Mark the documents as verified?",
+        description: "The application goes to the Head of Operations for approval. The change is recorded in the history.",
+        confirmLabel: "Documents verified",
+      });
+      if (ok) await run(action);
       return;
     }
     if (action === "approve-selection") {
@@ -128,7 +154,7 @@ export function ApplicantDetailView({ id }: { id: string }) {
   }
 
   async function addNote(body: string) {
-    live.setData(await addApplicantNote(id, body));
+    live.setData(await writes.addNote(id, body));
   }
 
   const panel = {
@@ -155,7 +181,7 @@ export function ApplicantDetailView({ id }: { id: string }) {
   return (
     <div>
       <Back />
-      <Header a={a} busy={busy} error={error} onAction={onAction} />
+      <Header a={a} busy={busy} error={error} onAction={onAction} onSchedule={() => { setError(null); setScheduling(true); }} />
 
       {/* Phones: the rest of the record (progress, every section) sits behind one tappable row. */}
       <PhoneMore title="More details">
@@ -198,9 +224,27 @@ export function ApplicantDetailView({ id }: { id: string }) {
       </div>
       </PhoneMore>
 
-      {sheet && SHEETS[sheet] ? (
+      {scheduling ? (
+        <InterviewDialogs
+          intent={{ kind: "schedule", row: scheduleRowOf(a) }}
+          interviewers={[]}
+          schedulable={[]}
+          onClose={() => setScheduling(false)}
+          onSaved={() => {
+            setScheduling(false);
+            playAdminSound("saved");
+            live.retry();
+          }}
+          onFailed={(text) => {
+            setScheduling(false);
+            setError(text);
+          }}
+        />
+      ) : null}
+
+      {sheet && sheetFor(sheet, a) ? (
         <NoteSheet
-          config={SHEETS[sheet]}
+          config={sheetFor(sheet, a) as NoteSheetConfig}
           busy={busy}
           error={error}
           onCancel={() => setSheet(null)}
@@ -208,7 +252,7 @@ export function ApplicantDetailView({ id }: { id: string }) {
             if (await run(sheet, note)) {
               setSheet(null);
               // After a Reject, offer to keep the person for future roles (explicitly asked, never automatic).
-              if (sheet === "reject") {
+              if (sheet === "reject" && !a.capabilities.canApproveSelection) {
                 const keep = await confirmAction({
                   tone: "neutral",
                   title: "Add to Talent Pool?",
@@ -234,11 +278,15 @@ function Back() {
   );
 }
 
-function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolean; error: string | null; onAction: (x: RecruitmentAction) => void }) {
+function Header({ a, busy, error, onAction, onSchedule }: { a: ApplicantDetail; busy: boolean; error: string | null; onAction: (x: RecruitmentAction) => void; onSchedule: () => void }) {
   const c = a.capabilities;
-  const hasActions = c.canShortlist || c.canSubmitForApproval || c.canApproveSelection || c.canHold || c.canReject || c.canRequestInfo || c.canMoveToTalentPool;
+  const hasActions = c.canShortlist || c.canSubmitForApproval || c.canApproveSelection || c.canHold || c.canReject || c.canRequestInfo || c.canMoveToTalentPool || !!c.canScheduleInterview || !!c.canVerifyDocuments;
   const approver = c.canApproveSelection;
-  const primary = c.canShortlist ? { label: "Shortlist", action: "shortlist" as const } : c.canSubmitForApproval ? { label: "Submit for approval", action: "submit-for-approval" as const } : approver ? { label: "Approve selection", action: "approve-selection" as const } : null;
+  const primary = c.canShortlist ? { label: "Shortlist", run: () => onAction("shortlist") }
+    : c.canScheduleInterview ? { label: "Schedule interview", run: onSchedule }
+    : c.canVerifyDocuments ? { label: "Documents verified", run: () => onAction("verify-documents") }
+    : c.canSubmitForApproval ? { label: "Submit for approval", run: () => onAction("submit-for-approval") }
+    : approver ? { label: "Approve selection", run: () => onAction("approve-selection") } : null;
   const menuItems = [
     ...(c.canRequestInfo ? [{ label: "Request more information", onSelect: () => onAction("request-info") }] : []),
     ...(c.canHold ? [{ label: "Put on hold", onSelect: () => onAction("hold") }] : []),
@@ -282,7 +330,7 @@ function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolea
     </div>
     {primary ? (
       <PhoneStickyAction>
-        <button type="button" disabled={busy} onClick={() => onAction(primary.action)} className={PD_CTA}>
+        <button type="button" disabled={busy} onClick={primary.run} className={PD_CTA}>
           {primary.label}
         </button>
       </PhoneStickyAction>
@@ -323,6 +371,16 @@ function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolea
                   Shortlist
                 </button>
               ) : null}
+              {c.canScheduleInterview ? (
+                <button type="button" disabled={busy} onClick={onSchedule} className="ap-btn ap-btn-p h-12 px-6 text-[15px] font-semibold text-white! max-[767px]:h-11 max-[767px]:px-5 max-[767px]:text-[14px]">
+                  Schedule interview
+                </button>
+              ) : null}
+              {c.canVerifyDocuments ? (
+                <button type="button" disabled={busy} onClick={() => onAction("verify-documents")} className="ap-btn ap-btn-p h-12 px-6 text-[15px] font-semibold text-white! max-[767px]:h-11 max-[767px]:px-5 max-[767px]:text-[14px]">
+                  Documents verified
+                </button>
+              ) : null}
               {c.canSubmitForApproval ? (
                 <button type="button" disabled={busy} onClick={() => onAction("submit-for-approval")} className="ap-btn ap-btn-p h-12 px-6 text-[15px] font-semibold text-white! max-[767px]:h-11 max-[767px]:px-5 max-[767px]:text-[14px]">
                   Submit for approval
@@ -355,8 +413,21 @@ function Header({ a, busy, error, onAction }: { a: ApplicantDetail; busy: boolea
               </p>
             ) : null}
           </div>
+        ) : error ? (
+          <p role="alert" className="text-[15px] font-semibold text-(--ap-rose)">
+            {error}
+          </p>
         ) : null}
       </div>
+      {a.staffRecord ? (
+        <p role="status" className="mt-4 rounded-xl bg-(--ap-tint-soft) px-4 py-3 text-[15px] leading-snug">
+          <b>Approved.</b> Staff number <b className="tabular-nums">{a.staffRecord.reference}</b>.{" "}
+          <Link href={`/admin/staff/directory/${a.staffRecord.id}`} className="font-bold text-(--ap-violet) underline">
+            Open the staff record
+          </Link>{" "}
+          to send the Staff app invitation.
+        </p>
+      ) : null}
       <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-4 border-t border-(--ap-line-2) pt-4 max-[767px]:mt-3 max-[767px]:gap-y-3 max-[767px]:pt-3 @min-[760px]:grid-cols-2">
         <NextActionBox a={a} />
         <ProgressRail a={a} />
