@@ -25,6 +25,7 @@ import { Mail, Search, X } from "@/components/applicant/icons";
 import { EmptyState } from "@/components/applicant/primitives";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
 import { invitationTiming } from "@/lib/admin/team-access/invitation-presentation";
+import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 import { AccessLinkSheet } from "./AccessLinkSheet";
 import { InvitationDetailsSheet } from "./InvitationDetailsSheet";
 import { getInvitationDetails, createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
@@ -419,7 +420,10 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
 
 function EmailSheet({ inv, busy, error, onCancel, onSubmit }: { inv: Invitation; busy: boolean; error: string | null; onCancel: () => void; onSubmit: (email: string) => void }) {
   const [email, setEmail] = useState(inv.email);
-  const ok = /^\S+@\S+\.\S+$/.test(email.trim()) && email.trim().toLowerCase() !== inv.email;
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const confirmOk = emailsMatch(email, confirmEmail);
+  const suggestion = emailTypoSuggestion(email);
+  const ok = /^\S+@\S+\.\S+$/.test(email.trim()) && email.trim().toLowerCase() !== inv.email && confirmOk;
   return (
     <SheetFrame
       title={`Edit the email for ${inv.name}`}
@@ -439,6 +443,22 @@ function EmailSheet({ inv, busy, error, onCancel, onSubmit }: { inv: Invitation;
         Email address
       </label>
       <input id="inv-email" type="email" className="ap-input mt-1.5" value={email} maxLength={120} onChange={(e) => setEmail(e.target.value)} />
+      <div aria-live="polite">
+        {suggestion ? (
+          <p className="mt-1 text-[13px] text-(--ap-muted)">
+            Did you mean{" "}
+            <button type="button" aria-label={`Use ${suggestion}`} className="font-semibold text-(--ap-violet) underline underline-offset-2" onClick={() => { setEmail(suggestion); setConfirmEmail(suggestion); }}>
+              {suggestion}
+            </button>
+            ?
+          </p>
+        ) : null}
+      </div>
+      <label htmlFor="inv-email-confirm" className={FIELD_LABEL}>
+        Confirm email address
+      </label>
+      <input id="inv-email-confirm" type="email" className="ap-input mt-1.5" value={confirmEmail} maxLength={120} autoComplete="off" aria-invalid={!!confirmEmail && !confirmOk} aria-describedby={confirmEmail && !confirmOk ? "inv-email-confirm-err" : undefined} onChange={(e) => setConfirmEmail(e.target.value)} />
+      {confirmEmail && !confirmOk ? <p id="inv-email-confirm-err" className="mt-1 text-[13px] font-semibold text-(--ap-rose)">The two emails don&apos;t match.</p> : null}
       {error ? (
         <p role="alert" className="mt-3 text-[14px] font-semibold text-(--ap-rose)">
           {error}

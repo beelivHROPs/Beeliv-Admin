@@ -17,6 +17,7 @@ import { loadPlacementChoices, type PlacementChoice } from "@/lib/admin/org-reco
 import type { ClientFields, OutletFields, StaffFields } from "@/lib/admin/org-records/writes";
 import { orgErrorMessage } from "@/lib/admin/org-records/transport";
 import { checkPhone, isValidPhone } from "@/lib/phone/phone";
+import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 
 const LABEL = "mt-4 block text-[13px] font-bold text-(--ap-ink-2)";
 const HINT = "mt-1.5 text-[13px] text-(--ap-muted)";
@@ -157,6 +158,7 @@ const today = () => {
 export function StaffSheet({ busy, error, onCancel, onSubmit, title = "Add staff member", submitLabel = "Add staff member", description = "A minimal record: who they are and where they work. The Staff ID is created for you. This does not give them access or send an email.", onUseExisting }: { busy: boolean; error: string | null; onCancel: () => void; onSubmit: (v: StaffFields) => void; title?: string; submitLabel?: string; description?: string; onUseExisting?: () => void }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("");
   const [clientId, setClientId] = useState("");
@@ -165,6 +167,7 @@ export function StaffSheet({ busy, error, onCancel, onSubmit, title = "Add staff
   const [choices, setChoices] = useState<PlacementChoice[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const startId = useId();
+  const emailId = useId();
   useEffect(() => {
     let off = false;
     loadPlacementChoices().then((c) => !off && setChoices(c), (e: unknown) => !off && setLoadError(orgErrorMessage(e, "We could not load your clients. Close this and try again.")));
@@ -173,7 +176,9 @@ export function StaffSheet({ busy, error, onCancel, onSubmit, title = "Add staff
   const outlets = useMemo(() => choices?.find((c) => c.id === clientId)?.outlets ?? [], [choices, clientId]);
   const canon = canonicalPhone(phone);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const ready = fullName.trim().length >= 2 && emailOk && canon !== null && !!clientId && !!outletId && !!role.trim() && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate <= today();
+  const confirmOk = emailsMatch(email, confirmEmail);
+  const suggestion = emailTypoSuggestion(email);
+  const ready = fullName.trim().length >= 2 && emailOk && confirmOk && canon !== null && !!clientId && !!outletId && !!role.trim() && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate <= today();
   return (
     <Shell
       title={title} busy={busy} error={error ?? loadError} ready={ready && !loadError} submitLabel={submitLabel} onCancel={onCancel}
@@ -183,6 +188,20 @@ export function StaffSheet({ busy, error, onCancel, onSubmit, title = "Add staff
       {onUseExisting ? <button type="button" className="ap-btn ap-btn-s mt-4" disabled={busy} onClick={onUseExisting}>Invite someone already in Staff Directory</button> : null}
       <Field label="Full name" required value={fullName} onChange={setFullName} max={200} />
       <Field label="Email" required type="email" value={email} onChange={setEmail} max={254} />
+      <div aria-live="polite">
+        {suggestion ? (
+          <p className={HINT}>
+            Did you mean{" "}
+            <button type="button" aria-label={`Use ${suggestion}`} className="font-semibold text-(--ap-violet) underline underline-offset-2" onClick={() => { setEmail(suggestion); setConfirmEmail(suggestion); }}>
+              {suggestion}
+            </button>
+            ?
+          </p>
+        ) : null}
+      </div>
+      <label htmlFor={emailId} className={LABEL}>Confirm email</label>
+      <input id={emailId} type="email" className="ap-input mt-1.5" value={confirmEmail} maxLength={254} required autoComplete="off" aria-invalid={!!confirmEmail && !confirmOk} aria-describedby={confirmEmail && !confirmOk ? `${emailId}-err` : undefined} onChange={(e) => setConfirmEmail(e.target.value)} />
+      {confirmEmail && !confirmOk ? <p id={`${emailId}-err`} className="mt-1.5 text-[13px] font-semibold text-[#C8102E]">The two emails don&apos;t match.</p> : null}
       <PhoneField label="Phone" value={phone} onChange={setPhone} />
       <Field label="Role or job title" required value={role} onChange={setRole} max={80} />
       <label className={LABEL}>Client</label>

@@ -1,9 +1,20 @@
 import type { Metadata } from "next";
-import { redirectToHub } from "@/lib/admin/hub-redirect";
+import { Suspense } from "react";
+import { ApplicantsList } from "@/components/admin/applicants/ApplicantsList";
+import { ScopeGate } from "@/components/admin/ScopeNote";
 
 export const metadata: Metadata = { title: "Applicants" };
 
-/** This list now lives in the simple hub (keeps any filters in the address). The embedded list component is unchanged. */
-export default function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  return redirectToHub("/admin/people", "applicants", searchParams);
+/**
+ * Applicants: its own page under the People dropdown (lead 2026-11-24). The list keeps its filters in the URL
+ * (useSearchParams), which needs a Suspense boundary. Old /admin/people?view=applicants links still open the People hub.
+ */
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="ap-shimmer h-[320px] rounded-2xl" role="status" aria-busy="true" aria-label="Loading applicants" />}>
+      <ScopeGate>
+        <ApplicantsList />
+      </ScopeGate>
+    </Suspense>
+  );
 }

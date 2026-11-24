@@ -231,7 +231,7 @@ export const liveApplicantsAdapter: ApplicantsAdapter = {
   async listApplicants(q: ApplicantsQuery): Promise<ApplicantsPage> {
     // Applications not switched on yet (Bright's final round): an honest empty list, not an error.
     const rows = await fetchAll(q.vacancyId).catch((e: unknown) => {
-      if (e instanceof Error && e.message === "unavailable") return [] as RowDto[];
+      if (e instanceof Error && (e as Error & { code?: string }).code === "unavailable") return [] as RowDto[];
       throw e;
     });
     const all = rows.map((d) => toRow(d));

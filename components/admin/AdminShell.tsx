@@ -45,7 +45,7 @@ import { soundForKinds } from "@/lib/notifications/catalog";
 import { InviteSheet } from "@/components/admin/team-access/InviteSheets";
 import type { InvitationKind } from "@/lib/admin/team-access/types";
 import { HOME_RECIPES, homeRoleFor } from "./overview/home-recipes";
-import { ADMIN_ROLE_CLASS, administrationItemsFor, HR_NAV_ITEMS, OPS_NAV_ITEMS, isNavActive, MOBILE_PRIMARY_HREFS, navGroupsFor, activeNavItem, isOpsInHrWorkspace, OPS_IN_HR_NAV, type AdminNavGroup, type AdminNavItem } from "./nav";
+import { ADMIN_ROLE_CLASS, administrationItemsFor, HR_NAV_ITEMS, OPS_NAV_ITEMS, isNavActive, MOBILE_PRIMARY_HREFS, navGroupsFor, activeNavItem, activeNavChild, isOpsInHrWorkspace, OPS_IN_HR_NAV, visibleNavChildren, type AdminNavChild, type AdminNavGroup, type AdminNavItem } from "./nav";
 import { canOpenRoute, isRestrictedRoute, useAccessRole } from "@/lib/admin/role-access";
 import { Can } from "./Can";
 import { PilotNotice } from "@/components/shared/PilotNotice";
@@ -93,6 +93,14 @@ function SheetGroup({ heading, children }: { heading: string; children: React.Re
 }
 
 const CLIENT_REQUESTS_HREF = "/admin/clients/requests";
+
+/** Dropdown items keep only the child pages this deployment, pilot menu and role show (hidden, never greyed). */
+function withVisibleChildren(groups: AdminNavGroup[], live: boolean, pilot: boolean, role: NonNullable<ReturnType<typeof useAccessRole>>): AdminNavGroup[] {
+  return groups.map((g) => ({
+    ...g,
+    items: g.items.map((i) => (i.children ? { ...i, children: pilotFilter(visibleNavChildren(i, live), pilot).filter((c) => canOpenRoute(role, c.href)) } : i)),
+  }));
+}
 
 function AdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -172,6 +180,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   // A phone sheet is tied to the page it was opened on: any navigation closes it.
   const [sheet, setSheet] = useState<{ at: string; kind: "admin" | "add" } | null>(null);
   const openSheet = (kind: "admin" | "add") => setSheet({ at: pathname, kind });
+  const navGroups = withVisibleChildren(pilotFilterGroups(isOpsInHrWorkspace(navRole, pathname) ? OPS_IN_HR_NAV : navGroupsFor(navRole), pilot), authLive, pilot, navRole);
+  // Phone More sheet: the People dropdown pages (same filtering as the sidebar).
+  const peopleChildren = navGroups.flatMap((g) => g.items).find((i) => i.href === "/admin/people")?.children ?? [];
 
   return (
     <MotionRoot>
@@ -183,7 +194,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           collapsed ? "" : "min-[1101px]:grid-cols-[248px_minmax(0,1fr)] min-[1361px]:grid-cols-[264px_minmax(0,1fr)]"
         }`}
       >
-        <Sidebar pathname={pathname} counts={counts} collapsed={collapsed} session={session} role={role} groups={pilotFilterGroups(isOpsInHrWorkspace(navRole, pathname) ? OPS_IN_HR_NAV : navGroupsFor(navRole), pilot)} />
+        <Sidebar pathname={pathname} counts={counts} collapsed={collapsed} session={session} role={role} groups={navGroups} />
 
         <div className="relative min-w-0">
           <DesktopTopbar unread={unread} notes={notes ?? []} session={session} />
@@ -206,8 +217,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {chat ? null : <MobileBottomNav pathname={pathname} counts={counts} onAdd={() => openSheet("add")} onMore={() => openSheet("admin")} moreActive={pathname.startsWith("/admin/people") || adminItems.some((i) => isNavActive(pathname, i.href))} />}
-        <MobileSheets sheet={sheet === null || sheet.at !== pathname ? null : sheet.kind} onClose={() => setSheet(null)} counts={counts} session={session} adminItems={adminItems} opsItems={opsItems} />
+        {chat ? null : <MobileBottomNav pathname={pathname} counts={counts} onAdd={() => openSheet("add")} onMore={() => openSheet("admin")} moreActive={isNavActive(pathname, "/admin/people") || adminItems.some((i) => isNavActive(pathname, i.href))} />}
+        <MobileSheets sheet={sheet === null || sheet.at !== pathname ? null : sheet.kind} onClose={() => setSheet(null)} counts={counts} session={session} adminItems={adminItems} opsItems={opsItems} peopleChildren={peopleChildren} />
         <ConfirmHost />
       </div>
     </MotionRoot>
@@ -325,8 +336,13 @@ function useGroupOpen() {
     },
     () => NAV_EMPTY,
   );
-  const toggle = (key: string) => {
-    navOpen = { ...navOpen, [key]: !navOpen[key] };
+  const toggle = (key: string) => set(key, !navOpen[key]);
+  /** `undefined` forgets the choice (a dropdown then follows the current page again). */
+  const set = (key: string, value: boolean | undefined) => {
+    const next = { ...navOpen };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    navOpen = next;
     try {
       window.localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(navOpen));
     } catch {
@@ -334,12 +350,12 @@ function useGroupOpen() {
     }
     navSubs.forEach((l) => l());
   };
-  return { open, toggle };
+  return { open, toggle, set };
 }
 
 function Sidebar({ pathname, counts, collapsed, session, role, groups }: { pathname: string; counts: NavCounts; collapsed: boolean; session: AdminSession | null; role: "hr" | "ops"; groups: AdminNavGroup[] }) {
   const fullName = session ? `${session.user.firstName} ${session.user.lastName}` : role === "ops" ? "Operations" : "HR";
-  const { open, toggle } = useGroupOpen();
+  const { open, toggle, set } = useGroupOpen();
   return (
     <aside
       style={{ viewTransitionName: "ap-sidebar" }}
@@ -404,6 +420,14 @@ function Sidebar({ pathname, counts, collapsed, session, role, groups }: { pathn
               const Icon = item.icon;
               const count = item.countKey ? counts[item.countKey] : 0;
               const showSection = !!group.label && !!item.section;
+              if (item.children?.length) {
+                return (
+                  <Fragment key={item.href}>
+                    {showSection ? <span className="admin-side-label ad-rail-hide mt-2 px-3 text-[11px] opacity-80">{item.section}</span> : null}
+                    <NavDropdown item={item} items={item.children} pathname={pathname} stored={open[`item:${item.href}`]} onSet={(v) => set(`item:${item.href}`, v)} />
+                  </Fragment>
+                );
+              }
               return (
                 <Fragment key={item.href}>
                 {showSection ? <span className="admin-side-label ad-rail-hide mt-2 px-3 text-[11px] opacity-80">{item.section}</span> : null}
@@ -442,6 +466,64 @@ function Sidebar({ pathname, counts, collapsed, session, role, groups }: { pathn
         </Link>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Dropdown nav item (e.g. People > Staff directory / Applicants / Talent pool), same row styles as the other items.
+ * Full sidebar: the row is a button that opens/closes the child list (aria-expanded + chevron). It opens by itself when
+ * the current page is one of its children; closing it is remembered until the next visit to one of them. While it is
+ * closed on one of its pages, the row itself carries the active pill so the place is never lost.
+ * Icon-only rail (collapsed, or tablet width): there is no room for a list, so the row is a link to the first child,
+ * shown active on any child page (the shell has no flyout pattern).
+ */
+function NavDropdown({ item, items, pathname, stored, onSet }: { item: AdminNavItem; items: AdminNavChild[]; pathname: string; stored: boolean | undefined; onSet: (v: boolean | undefined) => void }) {
+  const listId = useId();
+  const parentActive = isNavActive(pathname, item.href);
+  const activeChild = parentActive ? activeNavChild(pathname, { ...item, children: items }) : null;
+  const inside = activeChild !== null;
+  const open = stored ?? inside;
+  // Arriving on one of its pages re-opens a dropdown the person had closed earlier (only on navigation: closing it on the page sticks).
+  const seenPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (seenPath.current === pathname) return;
+    seenPath.current = pathname;
+    if (inside && stored === false) onSet(undefined);
+  }, [pathname, inside, stored, onSet]);
+  const Icon = item.icon;
+  return (
+    <>
+      <div className="ad-rail-hide">
+        <button type="button" onClick={() => onSet(!open)} aria-expanded={open} aria-controls={listId} className={`${NAV_ITEM} w-full text-left`}>
+          {parentActive && !open ? <motion.span layoutId="admin-nav-pill" transition={SPRING} className="ap-nav-pill absolute -inset-px rounded-xl" aria-hidden="true" /> : null}
+          <Icon className="relative size-[20px] shrink-0" aria-hidden="true" />
+          <span className="relative flex-1 text-[14px]">{item.label}</span>
+          <ChevronDown className={`relative size-4 shrink-0 opacity-70 transition-transform ${open ? "" : "-rotate-90"}`} aria-hidden="true" />
+        </button>
+      </div>
+      {open ? (
+        <ul id={listId} className="ad-rail-hide m-0 flex list-none flex-col gap-0.5 p-0" aria-label={item.label}>
+          {items.map((c) => {
+            const active = activeChild?.href === c.href;
+            return (
+              <li key={c.href}>
+                <Link href={c.href} aria-current={active ? "page" : undefined} className={`${NAV_ITEM} pl-[44px]`}>
+                  {active ? <motion.span layoutId="admin-nav-pill" transition={SPRING} className="ap-nav-pill absolute -inset-px rounded-xl" aria-hidden="true" /> : null}
+                  <span className="relative flex-1 text-[14px]">{c.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <div className="ad-rail-show">
+        <Link href={items[0].href} aria-current={parentActive ? "page" : undefined} className={NAV_ITEM}>
+          {parentActive ? <span className="ap-nav-pill absolute -inset-px rounded-xl" aria-hidden="true" /> : null}
+          <Icon className="relative size-[20px] shrink-0" aria-hidden="true" />
+          <span className="ad-rail-sr relative flex-1 text-[14px]">{item.label}</span>
+        </Link>
+      </div>
+    </>
   );
 }
 
@@ -596,6 +678,8 @@ function DesktopTopbar({ unread, notes, session }: { unread: number; notes: Admi
 const PAGE_TITLES: [string, string][] = [
   ["/admin/recruitment/interviews", "Interviews"],
   ["/admin/recruitment/applicants", "Applicants"],
+  ["/admin/staff/directory", "Staff directory"],
+  ["/admin/staff/documents", "Documents"],
   ["/admin/recruitment/shortlisting", "Shortlisting"],
   ["/admin/recruitment/vacancies", "Vacancies"],
   ["/admin/recruitment/offers", "Offers"],
@@ -697,7 +781,7 @@ function MobileBottomNav({ pathname, counts, onAdd, onMore, moreActive }: { path
 }
 
 /** Phone sheets: Administration menu and Quick add. */
-function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems }: { sheet: "admin" | "add" | null; onClose: () => void; counts: NavCounts; session: AdminSession | null; adminItems: AdminNavItem[]; opsItems: AdminNavItem[] }) {
+function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems, peopleChildren }: { sheet: "admin" | "add" | null; onClose: () => void; counts: NavCounts; session: AdminSession | null; adminItems: AdminNavItem[]; opsItems: AdminNavItem[]; peopleChildren: AdminNavChild[] }) {
   const signOut = useSignOut();
   const [invite, setInvite] = useState<InvitationKind | null>(null);
   return (
@@ -721,11 +805,21 @@ function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems }:
             </Link>
           </SheetGroup>
           <SheetGroup heading="People">
-            <Link href="/admin/people" onClick={onClose} className={GROUP_ROW}>
-              <UserRound className="size-[19px] shrink-0 text-(--ap-violet)" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">People</span>
-              <ChevronRight className="size-4 shrink-0 text-(--ap-faint)" aria-hidden="true" />
-            </Link>
+            {peopleChildren.length > 0 ? (
+              peopleChildren.map((c) => (
+                <Link key={c.href} href={c.href} onClick={onClose} className={GROUP_ROW}>
+                  <UserRound className="size-[19px] shrink-0 text-(--ap-violet)" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                  <ChevronRight className="size-4 shrink-0 text-(--ap-faint)" aria-hidden="true" />
+                </Link>
+              ))
+            ) : (
+              <Link href="/admin/people" onClick={onClose} className={GROUP_ROW}>
+                <UserRound className="size-[19px] shrink-0 text-(--ap-violet)" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">People</span>
+                <ChevronRight className="size-4 shrink-0 text-(--ap-faint)" aria-hidden="true" />
+              </Link>
+            )}
           </SheetGroup>
           {opsItems.length > 0 ? (
             <SheetGroup heading="Operations">

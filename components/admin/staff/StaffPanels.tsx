@@ -22,6 +22,8 @@ import { dayMonth } from "@/lib/client/format";
 import { LeaveStatusChip } from "@/components/admin/workforce/parts";
 import type { Live } from "@/lib/admin/workforce/hooks";
 import { DataTable } from "./DataTable";
+import { LiveStaffDocumentRows } from "./LiveStaffDocumentsView";
+import { orgRecordsMode } from "@/lib/admin/org-records/mode";
 import { DocStateChip, documentViewerHref, NeedsConfirmation, reassignHref } from "./parts";
 import { DCard, LINK_BTN, Pill, PillRow, Rows, isAwaiting, useFive, type PillTone } from "./detail-kit";
 
@@ -322,9 +324,12 @@ export function TrainingPanel({ s }: { s: StaffDetail }) {
 
 export function DocumentsPanel({ s }: { s: StaffDetail }) {
   const { rows, more } = useFive(s.documents);
+  const live = orgRecordsMode() === "live";
   return (
     <DCard title="Documents" hideTitleOnPhone right={<Link href="/admin/staff/documents" className={LINK_BTN}>All staff documents</Link>}>
-      {s.documents.length === 0 ? (
+      {live ? (
+        <LiveStaffDocumentRows reference={s.reference} name={s.name} />
+      ) : s.documents.length === 0 ? (
         <EmptyState icon={Files} title="No documents yet" description="Documents show here once they are uploaded or requested." />
       ) : (
         <>

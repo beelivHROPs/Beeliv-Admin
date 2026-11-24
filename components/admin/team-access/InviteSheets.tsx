@@ -24,6 +24,7 @@ import { CancelButton, FIELD_LABEL, PrimaryButton, SheetFrame } from "@/componen
 import { DatePicker } from "@/components/applicant/form-fields";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { inviteUser, useTeamFacets } from "@/lib/admin/team-access/hooks";
+import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 import { JOB_TITLE_MAX, type Invitation, type InvitationKind, type InvitePrefill, type TeamFacets } from "@/lib/admin/team-access/types";
 import { ClientWizard } from "./ClientInviteWizard";
 import { StaffWizard } from "./StaffInviteSheet";
@@ -83,6 +84,7 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
   const liveMode = teamAccessMode() === "live";
   const [name, setName] = useState(prefill?.name ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
+  const [confirmEmail, setConfirmEmail] = useState(prefill?.email ?? "");
   const [roleId, setRoleId] = useState(prefill?.roleId ?? "");
   const [jobTitle, setJobTitle] = useState("");
   const [levelId, setLevelId] = useState(liveMode ? "client" : "");
@@ -98,10 +100,12 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
   const [sent, setSent] = useState<Invitation | null>(null);
 
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
+  const confirmOk = emailsMatch(email, confirmEmail);
+  const suggestion = emailTypoSuggestion(email);
   const outlets = facets.outlets.filter((o) => o.clientId === clientId);
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   const scopeOk = kind === "internal" ? (allClients && (!liveMode || roleId === "hr_manager")) || scopeClients.length > 0 : kind === "client" ? !!clientId && outletIds.length > 0 : !!clientId;
-  const ready = !!name.trim() && emailOk && scopeOk && (!liveMode || !facets.scopeOptionsUnavailable || (kind === "internal" && allClients && roleId === "hr_manager")) && (kind === "internal" ? !!roleId : kind === "client" ? !!levelId : !!staffRole && !!startDate) && !busy;
+  const ready = !!name.trim() && emailOk && confirmOk && scopeOk && (!liveMode || !facets.scopeOptionsUnavailable || (kind === "internal" && allClients && roleId === "hr_manager")) && (kind === "internal" ? !!roleId : kind === "client" ? !!levelId : !!staffRole && !!startDate) && !busy;
 
   async function submit() {
     setBusy(true);
@@ -133,6 +137,22 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
       </label>
       <input id={`${uid}-e`} type="email" className="ap-input mt-1.5" value={email} maxLength={120} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!email && !emailOk} />
       {email && !emailOk ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Enter a valid email address.</p> : null}
+      <div aria-live="polite">
+        {suggestion ? (
+          <p className="mt-1 text-[13px] text-(--ap-muted)">
+            Did you mean{" "}
+            <button type="button" aria-label={`Use ${suggestion}`} className="font-semibold text-(--ap-violet) underline underline-offset-2" onClick={() => { setEmail(suggestion); setConfirmEmail(suggestion); }}>
+              {suggestion}
+            </button>
+            ?
+          </p>
+        ) : null}
+      </div>
+      <label htmlFor={`${uid}-ec`} className={FIELD_LABEL}>
+        Confirm email address
+      </label>
+      <input id={`${uid}-ec`} type="email" className="ap-input mt-1.5" value={confirmEmail} maxLength={120} autoComplete="off" onChange={(e) => setConfirmEmail(e.target.value)} aria-invalid={!!confirmEmail && !confirmOk} aria-describedby={confirmEmail && !confirmOk ? `${uid}-ec-err` : undefined} />
+      {confirmEmail && !confirmOk ? <p id={`${uid}-ec-err`} className="mt-1 text-[13px] font-semibold text-(--ap-rose)">The two emails don&apos;t match.</p> : null}
 
       {kind === "internal" ? (
         <>

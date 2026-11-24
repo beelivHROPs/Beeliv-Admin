@@ -12,7 +12,18 @@ import { Briefcase, Calendar, Clock3, FileCheck2, LayoutDashboard, Mail, ScrollT
 import { Activity, BarChart3, ShieldAlert, Store } from "@/components/client/icons";
 import { BookOpen, Megaphone } from "@/components/staff/icons";
 
+/** One page inside a dropdown nav item (e.g. People > Staff directory). */
+export type AdminNavChild = {
+  href: string;
+  label: string;
+  /** Other route prefixes that belong to this child (it stays highlighted on them). */
+  also?: string[];
+  /** Hidden on a live deployment (useAuthLive()): the page has no real data yet. */
+  liveHidden?: boolean;
+};
+
 export type AdminNavItem = {
+  /** The item's own route. For a dropdown item (with `children`) it is the hub/owner route used for highlighting and titles. */
   href: string;
   label: string;
   /** Short label for the phone bottom nav. */
@@ -24,6 +35,8 @@ export type AdminNavItem = {
   also?: string[];
   /** Plain sub-heading shown above this item inside the Administration group (starts a new section). */
   section?: string;
+  /** Makes this item a dropdown in the sidebar: the row opens/closes and these pages are listed under it. */
+  children?: AdminNavChild[];
 };
 
 export type AdminNavGroup = {
@@ -44,6 +57,13 @@ export const HR_NAV: AdminNavGroup[] = [
         label: "People",
         icon: UsersRound,
         also: ["/admin/staff", "/admin/recruitment/applicants", "/admin/recruitment/talent-pool"],
+        // Lead 2026-11-24: People is a dropdown with three separate pages. Talent pool has no real data yet, so it is hidden live.
+        children: [
+          { href: "/admin/staff/directory", label: "Staff directory", also: ["/admin/staff"] },
+          { href: "/admin/staff/documents", label: "Documents" },
+          { href: "/admin/recruitment/applicants", label: "Applicants" },
+          { href: "/admin/recruitment/talent-pool", label: "Talent pool", liveHidden: true },
+        ],
       },
     ],
   },
@@ -161,6 +181,24 @@ export function activeNavItem(pathname: string): AdminNavItem | null {
   }
   return best;
 }
+
+/** The child of a dropdown item that owns this path (longest href / `also` prefix wins), or null. */
+export function activeNavChild(pathname: string, item: AdminNavItem): AdminNavChild | null {
+  let best: AdminNavChild | null = null;
+  let bestLen = -1;
+  for (const child of item.children ?? []) {
+    for (const p of [child.href, ...(child.also ?? [])]) {
+      if (under(pathname, p) && p.length > bestLen) {
+        best = child;
+        bestLen = p.length;
+      }
+    }
+  }
+  return best;
+}
+
+/** A dropdown item's children that are shown: live deployments drop `liveHidden` pages. */
+export const visibleNavChildren = (item: AdminNavItem, live: boolean): AdminNavChild[] => (item.children ?? []).filter((c) => !(live && c.liveHidden));
 
 export function isNavActive(pathname: string, href: string): boolean {
   if (href === ADMIN_NOTIFICATIONS.href) return under(pathname, href);
