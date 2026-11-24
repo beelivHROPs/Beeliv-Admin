@@ -12,6 +12,9 @@ import type {
 } from "./types";
 import { addDays, startOfWeek, todayISO } from "@/lib/client/format";
 
+/** Standard hospitality sections (lead 2026-11-24: Section was empty when a placement had no department). Recorded departments come first. */
+const STANDARD_SECTIONS = ["Kitchen", "Bar", "Floor service", "Front desk", "Housekeeping", "Security", "Support", "Admin"];
+
 type Rec = Record<string, unknown>;
 const rec = (v: unknown): Rec | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Rec) : null);
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -72,7 +75,7 @@ async function roster(outletId: string, weekStart: string): Promise<WeekRoster> 
   return {
     weekStart, outletId, outlet: str(w.outlet), client: str(w.client), shifts,
     unpublishedCount: Number(w.unpublishedCount) || 0, lastPublishedAt: str(w.lastPublishedAt) || null, lastPublishedBy: str(w.lastPublishedBy) || null,
-    staff, history: [], sections: uniq([...staff.map((s) => s.section), ...shifts.map((s) => s.section)]), roles: uniq([...staff.map((s) => s.role), ...shifts.map((s) => s.role)]),
+    staff, history: [], sections: uniq([...staff.map((s) => s.section), ...shifts.map((s) => s.section), ...STANDARD_SECTIONS]), roles: uniq([...staff.map((s) => s.role), ...shifts.map((s) => s.role)]),
     canCopyLastWeek: manage && w.hasLastWeek === true, published: shifts.length > 0 && (Number(w.unpublishedCount) || 0) === 0,
     createdBy: str(w.lastPublishedBy), createdAt: str(w.lastPublishedAt), lastEditedBy: shifts[0]?.lastEditedBy ?? "", lastEditedAt: shifts[0]?.lastEditedAt ?? "",
     canCreateSchedule: manage, canPublishSchedule: manage,
