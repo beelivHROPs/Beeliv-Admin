@@ -20,6 +20,8 @@ export type AdminNavChild = {
   also?: string[];
   /** Hidden on a live deployment (useAuthLive()): the page has no real data yet. */
   liveHidden?: boolean;
+  /** Key into NavCounts for a badge on this child (the closed dropdown row shows the sum). */
+  countKey?: "inbox" | "documentation";
 };
 
 export type AdminNavItem = {
@@ -67,7 +69,28 @@ export const HR_NAV: AdminNavGroup[] = [
       },
     ],
   },
-  { items: [{ href: "/admin/jobs", label: "Jobs", icon: Briefcase, countKey: "documentation", also: ["/admin/recruitment"] }] },
+  {
+    items: [
+      {
+        href: "/admin/jobs",
+        label: "Recruitment",
+        short: "Jobs",
+        icon: Briefcase,
+        countKey: "documentation",
+        also: ["/admin/recruitment"],
+        // Lead-approved Jobs board v4 (2026-11-24): Recruitment is a dropdown like People. Pages still on sample data stay
+        // listed; on the live site they open the approved Coming soon screen (components/admin/SampleDataBanner.tsx).
+        children: [
+          { href: "/admin/jobs", label: "Jobs", also: ["/admin/recruitment/vacancies", "/admin/recruitment/shortlisting"] },
+          { href: "/admin/recruitment/interviews", label: "Interviews" },
+          { href: "/admin/recruitment/tests", label: "Tests & forms", also: ["/admin/recruitment/assessments"] },
+          { href: "/admin/recruitment/client-review", label: "Client review" },
+          { href: "/admin/recruitment/offers", label: "Offers" },
+          { href: "/admin/recruitment/documentation", label: "Documentation", countKey: "documentation" },
+        ],
+      },
+    ],
+  },
   { items: [{ href: "/admin/clients", label: "Clients", icon: Store }] },
   { items: [{ href: "/admin/calendar", label: "Calendar", icon: Calendar }] },
   {

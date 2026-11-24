@@ -1280,3 +1280,284 @@ html.admin-app .applicant-shell [role="status"][class*="ap-warn-bg"] {
 html[data-admin-theme="dark"].admin-app .applicant-shell [role="status"][class*="ap-warn-bg"] {
   background: #2a1620;
 }
+
+/* ======================================================================
+ * ADMIN JOBS GRID (lead-approved Jobs board v4, 2026-11-24).
+ * Components: components/admin/vacancies/VacanciesList.tsx (top section) and JobGrid.tsx (cards).
+ * Colours come from the Admin tokens; the few local values below are the board's own (fill pill, champagne, shadow).
+ * ====================================================================== */
+.ad-jobs {
+  --jc-fill: var(--admin-primary, #8b2252);
+  --jc-fill-hover: var(--admin-primary-hover, #721b43);
+  --jc-champ: #a8925a;
+  --jc-shadow: 0 1px 2px rgba(40, 10, 25, 0.05), 0 18px 40px -18px rgba(60, 15, 35, 0.28);
+  --jc-ring: 0 0 0 4px color-mix(in srgb, var(--jc-fill) 25%, transparent);
+}
+html[data-admin-theme="dark"] .ad-jobs {
+  --jc-fill: #8b2252;
+  --jc-fill-hover: #a4306a;
+  --jc-champ: #c1ac75;
+  --jc-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 22px 44px -20px rgba(0, 0, 0, 0.75);
+}
+
+/* Title row: "New job" pill with its round plus. */
+.ad-jobs-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 7px 0 24px;
+  border-radius: 999px;
+  background: var(--jc-fill);
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 12px 26px -12px rgba(139, 34, 82, 0.8);
+  transition: background-color 0.15s ease;
+}
+.ad-jobs-new:hover { background: var(--jc-fill-hover); }
+.ad-jobs-new:focus-visible { outline: 2px solid var(--ap-violet); outline-offset: 3px; }
+.ad-jobs-new-i {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* One search bar: location | search | Filter | Find. */
+.ad-jobs-sbar {
+  display: flex;
+  align-items: center;
+  background: var(--ap-surface);
+  border: 1px solid var(--ap-line);
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: var(--jc-shadow);
+}
+.ad-jobs-loc {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  min-width: 210px;
+  padding: 0 16px;
+  border-right: 1px solid var(--ap-line);
+}
+.ad-jobs-loc > div { height: 100%; }
+.ad-jobs-loc button { font-size: 15px; }
+.ad-jobs-loc button:focus-visible { outline: 2px solid var(--ap-violet); outline-offset: 2px; border-radius: 12px; }
+.ad-jobs-q {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 999px;
+}
+.ad-jobs-q:focus-within { box-shadow: inset 0 0 0 2px var(--ap-violet); }
+.ad-jobs-q input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ap-ink);
+  font-size: 15px;
+  outline: none;
+}
+.ad-jobs-q input::placeholder { color: var(--ap-faint); }
+.ad-jobs-actions { display: flex; align-items: center; gap: 6px; }
+.ad-jobs-fbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--ap-tint);
+  color: var(--ap-violet);
+  font-weight: 700;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+.ad-jobs-fbtn:hover,
+.ad-jobs-fbtn[data-open] { background: color-mix(in srgb, var(--ap-violet) 16%, var(--ap-tint)); }
+.ad-jobs-fbtn:focus-visible,
+.ad-jobs-find:focus-visible { outline: 2px solid var(--ap-violet); outline-offset: 2px; }
+.ad-jobs-find {
+  height: 46px;
+  padding: 0 26px;
+  border-radius: 999px;
+  background: var(--jc-fill);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+.ad-jobs-find:hover { background: var(--jc-fill-hover); }
+
+/* Quick status chips. */
+.ad-jobs-quick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0 0;
+  overflow-x: auto;
+  padding: 2px;
+}
+.ad-jobs-quick small { color: var(--ap-faint); font-size: 13px; margin-right: 4px; flex-shrink: 0; }
+.ad-jobs-qc {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid var(--ap-line);
+  background: var(--ap-surface);
+  color: var(--ap-ink-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.ad-jobs-qc:hover { border-color: var(--ap-violet); }
+.ad-jobs-qc b { font-weight: 600; color: var(--ap-faint); font-variant-numeric: tabular-nums; }
+.ad-jobs-qc[aria-pressed="true"] { background: var(--jc-fill); border-color: var(--jc-fill); color: #fff; }
+.ad-jobs-qc[aria-pressed="true"] b { color: rgba(255, 255, 255, 0.78); }
+.ad-jobs-qc:focus-visible { outline: 2px solid var(--ap-violet); outline-offset: 2px; }
+
+/* Results line: count + sort + grid/list toggle. */
+.ad-jobs-resbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.ad-jobs-resbar b { display: block; font-size: 16px; color: var(--ap-ink); }
+.ad-jobs-resbar > div > span { display: block; margin-top: 2px; font-size: 13px; color: var(--ap-faint); }
+.ad-jobs-rtools { display: flex; align-items: center; gap: 10px; }
+.ad-jobs-tg { display: flex; background: var(--ap-surface); border: 1px solid var(--ap-line); border-radius: 12px; padding: 3px; }
+.ad-jobs-tg button { width: 36px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--ap-muted); }
+.ad-jobs-tg button[aria-pressed="true"] { background: var(--jc-fill); color: #fff; }
+.ad-jobs-tg button:focus-visible { outline: 2px solid var(--ap-violet); outline-offset: 1px; }
+
+/* Grid: 3 columns desktop, 2 tablet, 1 phone. Cards stretch to the row's height so the notch badge stays attached. */
+.ad-jobs-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+@media (min-width: 768px) {
+  .ad-jobs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+}
+@media (min-width: 1280px) {
+  .ad-jobs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.ad-job { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; border-radius: 26px; }
+.ad-job:has(.ad-job-link:focus-visible) { outline: 2px solid var(--ap-violet); outline-offset: 4px; }
+/* The one card link: under the face, over the whole card (the face lets pointer events through except on the stops). */
+.ad-job-link { position: absolute; inset: 0; z-index: 0; border-radius: 26px; outline: none; }
+/* The card face with the round notch cut from the bottom-right corner (same idea as the approved NotchCard). */
+.ad-job-face {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 26px;
+  background: var(--ap-surface);
+  box-shadow: var(--jc-shadow);
+  -webkit-mask: radial-gradient(circle 40px at calc(100% - 34px) calc(100% - 34px), transparent 39px, #000 40px);
+  mask: radial-gradient(circle 40px at calc(100% - 34px) calc(100% - 34px), transparent 39px, #000 40px);
+  overflow: hidden;
+  pointer-events: none;
+}
+.ad-job-photo { position: relative; height: 172px; flex-shrink: 0; overflow: hidden; background: linear-gradient(135deg, #5a1838 0%, #35101f 60%, #1f0a14 100%); }
+.ad-job-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20, 6, 14, 0.05) 20%, rgba(20, 6, 14, 0.82) 100%); }
+.ad-job-photo-none::after { background: radial-gradient(120% 90% at 85% 0%, rgba(193, 172, 117, 0.18), transparent 60%), linear-gradient(180deg, transparent 30%, rgba(20, 6, 14, 0.55) 100%); }
+.ad-job-img { object-fit: cover; transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.ad-job:hover .ad-job-img { transform: scale(1.04); }
+.ad-job-glass {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(20, 6, 14, 0.28);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+.ad-job-client { left: 14px; max-width: calc(58% - 14px); }
+.ad-job-state { right: 14px; max-width: calc(42% - 14px); white-space: nowrap; }
+.ad-job-state::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12); }
+.ad-job-title { position: absolute; z-index: 1; left: 20px; right: 20px; bottom: 16px; color: #fff; }
+.ad-job-title h3 { margin: 0; color: #fff; font-size: 27px; font-weight: 500; line-height: 1.05; letter-spacing: -0.005em; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); overflow-wrap: anywhere; }
+.ad-job-title p { margin: 5px 0 0; font-size: 13px; color: rgba(255, 255, 255, 0.88); }
+
+.ad-job-body { flex: 1; display: flex; flex-direction: column; padding: 18px 20px 20px; }
+.ad-job-pay { margin: 0; font-size: 16.5px; font-weight: 600; color: var(--ap-ink); font-variant-numeric: tabular-nums; }
+.ad-job-per { color: var(--ap-faint); font-weight: 400; font-size: 13px; }
+.ad-job-date { margin: 4px 0 0; font-size: 13px; color: var(--jc-champ); font-weight: 600; }
+
+/* Hiring track: connected stops, the step needing HR lit. Stops are links (they take pointer events back). */
+.ad-job-track { --n: 3; margin: 18px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); position: relative; }
+.ad-job-track::before { content: ""; position: absolute; left: calc(50% / var(--n)); right: calc(50% / var(--n)); top: 17px; height: 2px; background: var(--ap-line); border-radius: 2px; }
+.ad-job-stop a { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; padding: 0 2px; pointer-events: auto; border-radius: 12px; outline: none; }
+.ad-job-stop a:focus-visible .ad-job-n { outline: 2px solid var(--ap-violet); outline-offset: 3px; }
+.ad-job-n { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--ap-surface); box-shadow: inset 0 0 0 1.5px var(--ap-line); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ap-ink-2); transition: transform 0.15s ease; }
+.ad-job-stop a:hover .ad-job-n { transform: translateY(-2px); }
+.ad-job-l { font-size: 11.5px; color: var(--ap-faint); line-height: 1.2; }
+.ad-job-stop[data-state="done"] .ad-job-n { background: var(--ap-tint); box-shadow: none; color: var(--ap-violet); }
+.ad-job-stop[data-state="hot"] .ad-job-n { background: var(--jc-fill); color: #fff; box-shadow: var(--jc-ring); }
+.ad-job-stop[data-state="hot"] .ad-job-l { color: var(--ap-ink); font-weight: 700; }
+.ad-job-stop[data-state="zero"] .ad-job-n { color: var(--ap-faint); }
+
+.ad-job-todo { display: flex; align-items: center; min-height: 44px; margin-top: auto; padding-top: 16px; padding-right: 62px; }
+.ad-job-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 14px; border-radius: 999px; background: var(--ap-tint); color: var(--ap-violet); font-weight: 700; font-size: 13px; line-height: 1.2; }
+.ad-job-pill::before { content: ""; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ad-job-quiet { font-size: 13px; color: var(--ap-faint); line-height: 1.4; }
+
+/* The round badge in the notch: gold fill ring (hired / openings) around the open arrow. Clicks pass to the card link. */
+.ad-job-badge { position: absolute; right: 0; bottom: 0; z-index: 1; width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--ap-surface); box-shadow: var(--jc-shadow); pointer-events: none; }
+.ad-job-ring { position: absolute; inset: 5px; width: 58px; height: 58px; transform: rotate(-90deg); }
+.ad-job-ring circle { fill: none; stroke-width: 3.5; }
+.ad-job-rtrack { stroke: var(--ap-line); }
+.ad-job-rfill { stroke: var(--jc-champ); stroke-linecap: round; }
+.ad-job-arrow { position: relative; width: 40px; height: 40px; border-radius: 50%; background: var(--jc-fill); color: #fff; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease; }
+.ad-job-arrow svg { width: 18px; height: 18px; }
+.ad-job:hover .ad-job-arrow { transform: rotate(45deg); }
+
+.ad-job-skel { flex: 1; overflow: hidden; border-radius: 26px; background: var(--ap-surface); box-shadow: var(--jc-shadow); }
+
+/* Phones: the search bar stacks (location, search, then Filter + Find); one card per row with a shorter photo. */
+@media (max-width: 767px) {
+  .ad-jobs-new { height: 46px; padding-left: 18px; font-size: 14px; }
+  .ad-jobs-new-i { width: 34px; height: 34px; }
+  .ad-jobs-sbar { flex-direction: column; align-items: stretch; border-radius: 24px; }
+  .ad-jobs-loc { min-width: 0; border-right: 0; border-bottom: 1px solid var(--ap-line); }
+  .ad-jobs-q { border-radius: 16px; }
+  .ad-jobs-actions { padding-top: 4px; }
+  .ad-jobs-actions > * { flex: 1; }
+  .ad-jobs-actions .ad-jobs-fbtn { width: 100%; justify-content: center; }
+  .ad-job-photo { height: 150px; }
+  .ad-job-title h3 { font-size: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-job-img,
+  .ad-job-n,
+  .ad-job-arrow,
+  .ad-jobs-new,
+  .ad-jobs-qc,
+  .ad-jobs-find,
+  .ad-jobs-fbtn { transition: none; }
+  .ad-job:hover .ad-job-img,
+  .ad-job-stop a:hover .ad-job-n,
+  .ad-job:hover .ad-job-arrow { transform: none; }
+}

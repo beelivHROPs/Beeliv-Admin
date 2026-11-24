@@ -58,3 +58,22 @@ export function resolveJobPhoto(image: VacancyImage | undefined | null, departme
   if (image?.source === "library") return { src: photoSrc(libraryById(image.ref)), alt };
   return { src: defaultPhotoFor(department).src, alt };
 }
+
+/**
+ * Photo for a job card on the Admin Jobs list (approved board v4). Chosen from the title first, then the
+ * department, by keyword. null = no matching photo: the card shows the deep plum gradient instead.
+ * Decorative only (the card's title says what the job is), so callers render it with alt="".
+ */
+const LIST_PHOTO_RULES: [RegExp, string][] = [
+  [/\b(kitchen|chefs?|cooks?|cooking)\b/i, "/images/jobs/head-chef.jpg"],
+  [/\b(bar|bartenders?|barman|barmaid)\b/i, "/images/jobs/bar-supervisor.jpg"],
+  [/\b(waiters?|waitress(es)?|waiting staff|floor|servers?)\b/i, "/images/editorial/waiter.jpg"],
+  [/\b(supervisors?|managers?|management)\b/i, "/images/jobs/restaurant-supervisor.jpg"],
+  [/\b(front desk|front office|receptionists?|reception|guests?)\b/i, "/images/jobs/guest-relations-officer.jpg"],
+  [/\b(dining|host|hostess)\b/i, "/images/editorial/dining.jpg"],
+];
+const matchPhoto = (text: string): string | null => LIST_PHOTO_RULES.find(([re]) => re.test(text))?.[1] ?? null;
+
+export function listCardPhoto(title: string, department: string): string | null {
+  return matchPhoto(title) ?? matchPhoto(department);
+}

@@ -108,7 +108,7 @@ function Greeting({ firstName, className = "" }: { firstName: string; className?
     <p className="flex items-center gap-2 text-[11.5px] font-semibold tracking-[.14em] text-(--ap-muted) uppercase"><span aria-hidden="true" className="h-0.5 w-5 rounded-full bg-(--ap-gold)" />Home</p>
     <h2 className="ap-serif mt-3 text-[32px] leading-[1.1] text-(--ap-ink)">{firstName ? `Welcome back, ${firstName}.` : "Welcome back."}</h2>
     <p className="mt-2 text-[15px] leading-[1.5] text-(--ap-ink-2)">Your current records and the work that needs your attention.</p>
-    <div className="mt-5 border-t border-(--ap-line) pt-3.5"><h2 className="text-[14px] font-semibold text-(--ap-ink)">Today</h2><FlatEmpty title="Interviews are not connected yet" description="Your schedule will appear here when available." /></div>
+    <div className="mt-5 border-t border-(--ap-line) pt-3.5"><h2 className="text-[14px] font-semibold text-(--ap-ink)">Today</h2><FlatEmpty title="No interviews today" description="Interviews you schedule will show here." /></div>
   </section>;
 }
 function StatStrip({ summary }: { summary: HomeSummary | null }) {

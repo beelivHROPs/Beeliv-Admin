@@ -14,7 +14,8 @@ import { useState } from "react";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { ANY, BODY_ROW, CARD_ITEM, CARD_LIST, EMPTY_CARD, HEAD_ROW, ListCard, ListToolbar, NoResults, TABLE_CARD, TH, useBatch, type FilterDef } from "@/components/admin/listKit";
 import { ReasonSheet } from "@/components/admin/offers/Sheet";
-import { RowMenu } from "@/components/admin/overview/RowMenu";
+import { RowMenu, type RowMenuItem } from "@/components/admin/overview/RowMenu";
+import { rowOpenClick } from "@/components/admin/RowClick";
 import { ShowMore } from "@/components/admin/ShowMore";
 import { confirmAction } from "@/components/applicant/ConfirmDialog";
 import { Search, ShieldCheck } from "@/components/applicant/icons";
@@ -25,6 +26,7 @@ import { formatRelativePast } from "@/lib/applicant/time";
 import { setAccountState, updateAccess, useAccessList, useTeamFacets, type AccessList } from "@/lib/admin/team-access/hooks";
 import type { AccessPatch, AccessRow, AccountStatus, StateAction, TeamCapabilities } from "@/lib/admin/team-access/types";
 import { AccessSheet, HistorySheet } from "./AccessSheets";
+import { PersonDetailsSheet } from "./PersonDetailsSheet";
 import { ACCOUNT_LABEL, ACCOUNT_ORDER, ACCOUNT_TONE, INVITATIONS_HREF } from "./meta";
 import { Restricted } from "@/components/admin/offers/parts";
 
@@ -57,6 +59,7 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
   const [reasonFor, setReasonFor] = useState<{ row: AccessRow; action: StateAction } | null>(null);
   const [accessFor, setAccessFor] = useState<AccessRow | null>(null);
   const [historyFor, setHistoryFor] = useState<AccessRow | null>(null);
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sheetError, setSheetError] = useState<string | null>(null);
 
@@ -132,8 +135,9 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
     }
   }
 
-  const menuFor = (r: AccessRow) => {
-    const items = [{ label: "View history", onSelect: () => setHistoryFor(r) }] as { label: string; href?: string; onSelect?: () => void; tone?: "default" | "danger" }[];
+  /** The row's actions. The three-dot menu and the Person details panel show the SAME list with the SAME handlers. */
+  const itemsFor = (r: AccessRow) => {
+    const items: RowMenuItem[] = [{ label: "View history", onSelect: () => setHistoryFor(r) }];
     if (r.status === "invited") items.push({ label: "View invitation", href: `${INVITATIONS_HREF}` });
     if (caps.canChangeAccess && r.status !== "invited" && r.status !== "deactivated" && r.kind !== "internal") items.push({ label: r.kind === "client" ? "Change outlets and access" : "Change entitlements", onSelect: () => { setSheetError(null); setAccessFor(r); } });
     if (caps.canChangeState) {
@@ -145,8 +149,15 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
         items.push({ label: "Deactivate", tone: "danger", onSelect: () => askState(r, "deactivate") });
       } else if (r.status === "deactivated") items.push({ label: "Reactivate", onSelect: () => askState(r, "reactivate") });
     }
-    return <RowMenu label={`Actions for ${r.name}`} items={items} />;
+    return items;
   };
+  const menuFor = (r: AccessRow) => (
+    <div data-no-row onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <RowMenu label={`Actions for ${r.name}`} items={itemsFor(r)} />
+    </div>
+  );
+  // Looked up by id so the panel follows the live list (status changes after an action show at once).
+  const detailsRow = detailsFor ? (page.rows.find((x) => x.id === detailsFor) ?? null) : null;
 
   const shown = page.rows.slice(0, limit);
   const refreshing = live.status === "loading";
@@ -194,8 +205,8 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
                 <span role="columnheader" className="sr-only">Actions</span>
               </div>
               {shown.map((r) => (
-                <div key={r.id} role="row" className={`grid ${COLS} items-center gap-x-4 ${BODY_ROW} min-h-[68px]`}>
-                  <div role="cell" className="min-w-0"><Who r={r} /></div>
+                <div key={r.id} role="row" onClick={rowOpenClick(() => setDetailsFor(r.id))} className={`grid ${COLS} cursor-pointer items-center gap-x-4 ${BODY_ROW} min-h-[68px]`}>
+                  <div role="cell" className="min-w-0"><Who r={r} onOpen={() => setDetailsFor(r.id)} /></div>
                   <div role="cell" className="min-w-0 leading-tight">
                     <span className="block truncate text-[14px] text-(--ap-ink-2)" title={r.roleLabel}>{r.roleLabel}</span>
                     <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={r.scopeLabel}>{r.scopeLabel}</span>
@@ -210,9 +221,9 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
             </div>
             <ul className={`${CARD_LIST} ad-dtable min-[768px]:rounded-xl min-[768px]:border min-[768px]:border-(--ap-line) min-[768px]:bg-(--ap-surface) min-[768px]:px-4 @min-[860px]:hidden`}>
               {shown.map((r) => (
-                <li key={r.id} className={CARD_ITEM}>
+                <li key={r.id} onClick={rowOpenClick(() => setDetailsFor(r.id))} className={`${CARD_ITEM} cursor-pointer`}>
                   <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1"><Who r={r} /></div>
+                    <div className="min-w-0 flex-1"><Who r={r} onOpen={() => setDetailsFor(r.id)} /></div>
                     {menuFor(r)}
                   </div>
                   <p className="mt-2 truncate text-[13px] text-(--ap-muted)" title={`${r.roleLabel}, ${r.scopeLabel}`}>
@@ -245,17 +256,21 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
         />
       ) : null}
       {accessFor ? <AccessSheet row={accessFor} busy={busy} error={sheetError} onCancel={() => setAccessFor(null)} onSubmit={submitAccess} /> : null}
+      {detailsRow ? <PersonDetailsSheet row={detailsRow} roleHead={copy.roleHead} scopeHead={copy.scopeHead} actions={itemsFor(detailsRow)} onClose={() => setDetailsFor(null)} /> : null}
       {historyFor ? <HistorySheet id={historyFor.id} name={historyFor.name} onClose={() => setHistoryFor(null)} /> : null}
     </div>
   );
 }
 
-function Who({ r }: { r: AccessRow }) {
+/** The name is a real button (keyboard: Tab to it, Enter/Space opens Person details); the rest of the row opens it on click. */
+function Who({ r, onOpen }: { r: AccessRow; onOpen: () => void }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <AdminAvatar name={r.name} photoUrl={r.photoUrl} size={40} />
       <div className="min-w-0 leading-tight">
-        <span className="block truncate text-[15px] font-bold text-(--ap-ink)">{r.name}</span>
+        <button type="button" onClick={onOpen} aria-label={`Open details for ${r.name}`} className="block max-w-full truncate rounded text-left text-[15px] font-bold text-(--ap-ink) hover:text-(--ap-violet) focus-visible:outline-2 focus-visible:outline-(--ap-violet)">
+          {r.name}
+        </button>
         {r.jobTitle ? <span className="mt-0.5 block truncate text-[13px] font-semibold text-(--ap-ink-2)" title={r.jobTitle}>{r.jobTitle}</span> : null}
         <span className="mt-0.5 block truncate text-[13px] text-(--ap-muted)" title={r.email}>{r.email}</span>
       </div>

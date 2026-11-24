@@ -1,33 +1,39 @@
 "use client";
 
 /**
- * Vacancies list (HR, spec 14 / 15). Layout reflows by the CONTAINER's width: a
- * real table when there is room, stacked cards otherwise (phones, narrow
- * tablets). Search, filters and tabs live in the URL so Overview drill-through
- * links (e.g. ?status=published) and reloads land on the same list.
+ * Admin Jobs list (HR, spec 14 / 15), laid out as the lead-approved Jobs board v4
+ * (2026-11-24): title + "New job", ONE search bar (location, search, Filter, Find),
+ * "Quick:" status chips with counts, a results line with sort and a grid / list
+ * toggle, then photo cards (JobGrid) or the existing table (list view).
+ * Search, filters, tab, sort, location and view live in the URL so Overview
+ * drill-through links (e.g. ?status=published) and reloads land on the same list.
  *
- * Reused: PageHeading / EmptyState (applicant primitives), FilterTabs,
- * SelectMenu (via Client records-filters SearchField + FilterSelect), Client
- * StatusChip (via VacancyStatusChip), ErrorPanel, RowMenu, Disc.
+ * Data: useVacancies() -> service -> the live adapter when
+ * NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED is "true", else the local sample adapter.
+ * On a live deployment without the vacancies backend the page never renders: it
+ * shows the Coming soon screen (lib/admin/sample-routes.ts + SampleDataBanner).
+ *
+ * Location: the vacancy read has no location filter yet, so the dropdown lists the
+ * locations of the jobs loaded so far and narrows those rows on this screen.
  */
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { Briefcase, ChevronRight, Clock3, MapPin, Plus } from "@/components/applicant/icons";
+import { Briefcase, ChevronRight, Clock3, MapPin, Plus, Search } from "@/components/applicant/icons";
 import { NotchCard } from "@/components/shared/premium/NotchCard";
 import { EmptyState, PageHeading } from "@/components/applicant/primitives";
+import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { ErrorPanel } from "@/components/staff/ErrorPanel";
-import { ActiveChips, CARD_LIST, EMPTY_CARD, ListSkeleton, ListTabs, TABLE_CARD, TH, activeFilterChips, useBatch, NoResults, type ActiveChip, type FilterDef } from "@/components/admin/listKit";
+import { ActiveChips, CARD_LIST, EMPTY_CARD, TABLE_CARD, TH, activeFilterChips, useBatch, NoResults, type ActiveChip, type FilterDef } from "@/components/admin/listKit";
 import { FilterField, FilterSection, FiltersButton, StatusMark } from "@/components/admin/standard";
-import { SearchBar } from "@/components/shared/search/SearchCard";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { ShowMore } from "@/components/admin/ShowMore";
-import { PhoneHero } from "@/components/admin/PhoneHero";
 import { RowMenu } from "@/components/admin/overview/RowMenu";
 import { useUrlParams } from "@/components/admin/applicants/url";
 import { NEW_VACANCY_HREF } from "@/lib/admin/links";
 import { useVacancies } from "@/lib/admin/vacancies/hooks";
 import { VACANCY_SORTS, type VacanciesPage, type VacancyQuery, type VacancyRow, type VacancyStatus, type VacancyTab } from "@/lib/admin/vacancies/types";
-import { closesText, STATUS_LABEL, STATUS_ORDER, STATUS_TONE, TAB_LABEL, TAB_ORDER } from "./meta";
+import { closesText, QUICK_LABEL, STATUS_LABEL, STATUS_ORDER, STATUS_TONE, TAB_LABEL, TAB_ORDER } from "./meta";
+import { JobGrid, JobGridSkeleton } from "./JobGrid";
 import { Restricted } from "./parts";
 
 const ANY = "__any";
@@ -40,6 +46,80 @@ export const vacancyApplicantsHref = (id: string) => `/admin/recruitment/applica
 const isStatus = (v: string): v is VacancyStatus => (STATUS_ORDER as string[]).includes(v);
 const isTab = (v: string): v is VacancyTab => (TAB_ORDER as string[]).includes(v);
 
+const SETTINGS_LINK = process.env.NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED === "true";
+
+/** Page title row: "Jobs" + the primary "New job" pill (only when the server says this person may create jobs). */
+function JobsHeading({ action }: { action?: React.ReactNode }) {
+  return (
+    <PageHeading
+      title="Jobs"
+      right={
+        <div className="flex flex-wrap items-center gap-3">
+          {SETTINGS_LINK ? (
+            <Link href="/admin/recruitment/vacancies/settings" className="ap-btn">
+              Job settings
+            </Link>
+          ) : null}
+          {action}
+        </div>
+      }
+    />
+  );
+}
+
+function NewJobLink() {
+  return (
+    <Link href={NEW_VACANCY_HREF} className="ad-jobs-new">
+      New job
+      <span className="ad-jobs-new-i" aria-hidden="true">
+        <Plus className="size-5" />
+      </span>
+    </Link>
+  );
+}
+
+/** Whole-page loading state: heading, search bar, chips and a card grid in the loaded page's shape. */
+export function JobsSkeleton() {
+  return (
+    <div className="ad-jobs" role="status" aria-busy="true" aria-label="Loading jobs">
+      <JobsHeading />
+      <div className="ap-shimmer h-[60px] rounded-full max-[767px]:h-[170px] max-[767px]:rounded-3xl" />
+      <div className="mt-4 flex gap-2 overflow-hidden">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="ap-shimmer h-9 w-24 shrink-0 rounded-full" />
+        ))}
+      </div>
+      <div className="ap-shimmer mt-5 h-10 w-48 rounded-xl" />
+      <JobGridSkeleton />
+    </div>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4" aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-4" aria-hidden="true">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-(--ap-violet)" aria-hidden="true">
+      <path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4" />
+    </svg>
+  );
+}
+
 export function VacanciesList() {
   const url = useUrlParams();
   const rawTab = url.get("tab");
@@ -48,6 +128,8 @@ export function VacanciesList() {
   // The Overview's "Open vacancies" metric links to ?status=published: that means the Open tab (Published + Closing soon).
   const tab: VacancyTab = isTab(rawTab) ? rawTab : rawStatus === "published" ? "open" : "all";
   const sort = VACANCY_SORTS.some((o) => o.value === url.get("sort")) ? url.get("sort") : "newest";
+  const view: "grid" | "list" = url.get("view") === "list" ? "list" : "grid";
+  const loc = url.get("loc");
   const batch = useBatch([url.get("q"), tab, rawStatus, rawState, url.get("dept"), url.get("client"), url.get("recruiter"), sort].join("|"));
   const query: VacancyQuery = {
     search: url.get("q"),
@@ -68,175 +150,190 @@ export function VacanciesList() {
 
   const [searchText, setSearchText] = useState(query.search);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live as you type (short pause); "Find" applies it at once.
   const onSearch = (v: string) => {
     setSearchText(v);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => url.set({ q: v.trim() || undefined }), 250);
   };
+  const onFind = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (timer.current) clearTimeout(timer.current);
+    url.set({ q: searchText.trim() || undefined });
+  };
   const setFilter = (key: string, v: string) => url.set({ [key]: v === ANY || v === "" ? undefined : v });
   const clearAll = () => {
     setSearchText("");
-    url.set({ q: undefined, tab: undefined, status: undefined, state: undefined, dept: undefined, client: undefined, recruiter: undefined });
+    url.set({ q: undefined, tab: undefined, status: undefined, state: undefined, dept: undefined, client: undefined, recruiter: undefined, loc: undefined });
   };
-  const clearFilters = () => url.set({ tab: undefined, status: undefined, state: undefined, dept: undefined, client: undefined, recruiter: undefined });
+  const clearFilters = () => url.set({ status: undefined, state: undefined, dept: undefined, client: undefined, recruiter: undefined });
   const filterDefs: FilterDef[] = [
     { key: "dept", control: "select", label: "Department", anyLabel: "All", value: query.department || ANY, onChange: (v) => setFilter("dept", v), options: withAny("All departments", (page?.facets.departments ?? []).map((d) => ({ value: d, label: d }))) },
     { key: "client", control: "select", label: "Client", anyLabel: "All", value: query.clientId || ANY, onChange: (v) => setFilter("client", v), options: withAny("All clients", (page?.facets.clients ?? []).map((c) => ({ value: c.id, label: c.name }))) },
     { key: "recruiter", control: "select", label: "Recruiter", anyLabel: "All", value: query.recruiterId || ANY, onChange: (v) => setFilter("recruiter", v), options: withAny("All recruiters", [...(page?.facets.recruiters ?? []).map((r) => ({ value: r.id, label: r.name })), { value: "none", label: "Unassigned" }]) },
   ];
-  const filtersActive = !!(query.search || query.status || query.department || query.clientId || query.recruiterId);
+  const filtersActive = !!(query.search || query.status || query.department || query.clientId || query.recruiterId || loc);
   const anyNarrowing = filtersActive || query.tab !== "all";
-
-  const statusDef: FilterDef = {
-    key: "status",
-    label: "Status",
-    value: query.tab,
-    onChange: (v) => url.set({ tab: v === "all" ? undefined : v, status: undefined }),
-    options: TAB_ORDER.map((t) => ({ value: t, label: `${TAB_LABEL[t]}${page ? ` ${page.tabCounts[t]}` : ""}` })),
-    control: "chips",
-  };
   const sortDef: FilterDef = { key: "sort", label: "Sort", value: sort, onChange: (v) => url.set({ sort: v === "newest" ? undefined : v }), options: VACANCY_SORTS, control: "select" };
-  const appliedChips: ActiveChip[] = [
-    ...activeFilterChips(filterDefs),
-  ];
-  const activeCount = appliedChips.length;
-
-  const heading = (right?: React.ReactNode) => <PageHeading title="Vacancies" right={<div className="flex flex-wrap gap-3">{process.env.NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED==='true'?<Link href="/admin/recruitment/vacancies/settings" className="ap-btn">Vacancy settings</Link>:null}{right}</div>} />;
+  const appliedChips: ActiveChip[] = [...(loc ? [{ key: "loc", label: "Location", text: loc, onRemove: () => url.set({ loc: undefined }) }] : []), ...activeFilterChips(filterDefs)];
+  const activeCount = activeFilterChips(filterDefs).length;
 
   if (live.status === "error") {
     return (
-      <>
-        {heading()}
-        <ErrorPanel title="We could not load the vacancies" retry={live.retry} />
-      </>
+      <div className="ad-jobs">
+        <JobsHeading />
+        <ErrorPanel title="We could not load the jobs" retry={live.retry} />
+      </div>
     );
   }
   if (live.status === "restricted") {
     return (
-      <>
-        {heading()}
-        <Restricted what="Vacancies" />
-      </>
+      <div className="ad-jobs">
+        <JobsHeading />
+        <Restricted what="Jobs" />
+      </div>
     );
   }
-  if (!page) return <ListSkeleton title="Vacancies" label="Loading vacancies" />;
+  if (!page) return <JobsSkeleton />;
 
-  const newButton = page.capabilities.canCreate ? (
-    <Link href={NEW_VACANCY_HREF} className="ap-btn ap-btn-p h-12 px-5 text-[15px] font-semibold text-white!">
-      <Plus className="size-4" aria-hidden="true" /> New vacancy
-    </Link>
-  ) : undefined;
+  const newButton = page.capabilities.canCreate ? <NewJobLink /> : undefined;
 
   if (page.workspaceEmpty) {
     return (
-      <>
-        {heading(newButton)}
+      <div className="ad-jobs">
+        <JobsHeading action={newButton} />
         <div className={EMPTY_CARD}>
-          <EmptyState icon={Briefcase} title="No vacancies yet" description="Create a vacancy to start receiving applications. Drafts stay private until they are published." action={newButton} />
+          <EmptyState icon={Briefcase} title="No jobs yet" description="Create a job to start receiving applications. Drafts stay private until they are published." action={newButton} />
         </div>
-      </>
+      </div>
     );
   }
 
   const refreshing = live.status === "loading";
+  // Locations of the jobs loaded so far (the read has no location facet yet); the chosen one stays listed.
+  const locations = [...new Set([...page.rows.map((r) => r.location.trim()).filter(Boolean), ...(loc ? [loc] : [])])].sort((a, b) => a.localeCompare(b));
+  const rows = loc ? page.rows.filter((r) => r.location.trim() === loc) : page.rows;
+  const count = loc ? rows.length : page.total;
+  const sortLabel = VACANCY_SORTS.find((o) => o.value === sort)?.label ?? "Newest first";
 
   const menuFor = (r: VacancyRow) => (
     <RowMenu
       label={`Actions for ${r.title}`}
       items={[
-        { label: "View vacancy", href: vacancyHref(r.id) },
-        ...(page.capabilities.canEdit ? [{ label: "Edit vacancy", href: vacancyEditHref(r.id) }] : []),
+        { label: "View job", href: vacancyHref(r.id) },
+        ...(page.capabilities.canEdit ? [{ label: "Edit job", href: vacancyEditHref(r.id) }] : []),
         { label: "View applicants", href: vacancyApplicantsHref(r.id) },
       ]}
     />
   );
 
   return (
-    <div>
-      {heading(newButton)}
+    <div className="ad-jobs">
+      <JobsHeading action={newButton} />
 
-      <section aria-label="Vacancies" data-search-scope className="ap-card min-w-0 rounded-[20px] p-4.5 max-[767px]:rounded-none max-[767px]:border-0 max-[767px]:bg-transparent max-[767px]:p-0 max-[767px]:shadow-none min-[768px]:rounded-none min-[768px]:border-0 min-[768px]:bg-transparent min-[768px]:p-0 min-[768px]:shadow-none">
-      <div className="contents max-[767px]:mb-4 max-[767px]:block">
-      <SearchBar
-        search={{ value: searchText, onChange: onSearch, label: "Search vacancies", placeholder: "Search title, client, recruiter or location" }}
-        settleKey={[tab, rawStatus, rawState, query.department, query.clientId, query.recruiterId, sort].join("|")}
-        filterSlot={
-        <FiltersButton active={activeCount} resultCount={page.total} onClear={clearFilters}>
-          {({ sheet }) => (
-            <>
-              {sheet ? null : (
-                <FilterSection title="Status">
-                  <FilterField f={statusDef} sheet={sheet} />
-                </FilterSection>
+      <section aria-label="Jobs" data-search-scope className="min-w-0">
+        <form role="search" aria-label="Find jobs" onSubmit={onFind} className="ad-jobs-sbar">
+          <div className="ad-jobs-loc">
+            <SelectMenu
+              variant="bare"
+              label="Location"
+              icon={<MapPin className="size-[18px] shrink-0 text-(--ap-violet)" aria-hidden="true" />}
+              value={loc || ANY}
+              options={[{ value: ANY, label: "All locations" }, ...locations.map((l) => ({ value: l, label: l }))]}
+              onChange={(v) => url.set({ loc: v === ANY ? undefined : v })}
+              className="font-medium text-(--ap-ink-2)!"
+            />
+          </div>
+          <label className="ad-jobs-q">
+            <Search className="size-[18px] shrink-0 text-(--ap-violet)" aria-hidden="true" />
+            <span className="sr-only">Search jobs</span>
+            <input type="search" value={searchText} onChange={(e) => onSearch(e.target.value)} placeholder="Search by title, client or recruiter" autoComplete="off" />
+          </label>
+          <div className="ad-jobs-actions">
+            <FiltersButton active={activeCount} resultCount={page.total} onClear={clearFilters} triggerLabel="Filter" triggerClassName="ad-jobs-fbtn">
+              {({ sheet }) => (
+                <>
+                  {filterDefs.map((f) => (
+                    <FilterSection key={f.key} title={f.label} inline>
+                      <FilterField f={f} sheet={sheet} />
+                    </FilterSection>
+                  ))}
+                  <FilterSection title="Sort" inline>
+                    <FilterField f={sortDef} sheet={sheet} />
+                  </FilterSection>
+                </>
               )}
-              {filterDefs.map((f) => (
-                <FilterSection key={f.key} title={f.label} inline>
-                  <FilterField f={f} sheet={sheet} />
-                </FilterSection>
-              ))}
-              <FilterSection title="Sort" inline>
-                <FilterField f={sortDef} sheet={sheet} />
-              </FilterSection>
+            </FiltersButton>
+            <button type="submit" className="ad-jobs-find">
+              Find
+            </button>
+          </div>
+        </form>
+
+        <div role="group" aria-label="Jobs by status" className="ad-jobs-quick ap-scrollbar-none">
+          <small>Quick:</small>
+          {TAB_ORDER.map((t) => {
+            const on = query.tab === t;
+            return (
+              <button key={t} type="button" aria-pressed={on} onClick={() => url.set({ tab: t === "all" ? undefined : t, status: undefined })} className="ad-jobs-qc">
+                {QUICK_LABEL[t]}
+                <b>{page.tabCounts[t]}</b>
+              </button>
+            );
+          })}
+        </div>
+        <ActiveChips chips={appliedChips} onClearAll={clearAll} className="mt-3" />
+
+        <div className="ad-jobs-resbar">
+          <div aria-live="polite">
+            <b>
+              Showing {count} {count === 1 ? "job" : "jobs"}
+            </b>
+            <span>{sortLabel}</span>
+          </div>
+          <div className="ad-jobs-rtools">
+            <SelectMenu variant="compact" label="Sort jobs" align="right" icon={<SortIcon />} value={sort} options={VACANCY_SORTS} onChange={(v) => url.set({ sort: v === "newest" ? undefined : v })} className="border-(--ap-line)! bg-(--ap-surface)! text-(--ap-ink-2)!" />
+            <div role="group" aria-label="Layout" className="ad-jobs-tg">
+              <button type="button" aria-pressed={view === "list"} aria-label="List view" title="List view" onClick={() => url.set({ view: "list" })}>
+                <ListIcon />
+              </button>
+              <button type="button" aria-pressed={view === "grid"} aria-label="Grid view" title="Grid view" onClick={() => url.set({ view: undefined })}>
+                <GridIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={`@container mt-6 transition-opacity ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
+          {rows.length === 0 ? (
+            anyNarrowing ? (
+              <NoResults
+                noun="jobs"
+                filters={filterDefs}
+                search={query.search}
+                onClearSearch={() => {
+                  setSearchText("");
+                  url.set({ q: undefined });
+                }}
+                tab={query.tab !== "all" ? { label: "Status", text: TAB_LABEL[query.tab], onRemove: () => url.set({ tab: undefined, status: undefined, state: undefined }) } : loc ? { label: "Location", text: loc, onRemove: () => url.set({ loc: undefined }) } : null}
+                onClear={clearAll}
+              />
+            ) : (
+              <div className="py-6">
+                <EmptyState icon={Briefcase} title="No jobs in this view" description="There are no jobs to show yet." />
+              </div>
+            )
+          ) : view === "grid" ? (
+            <JobGrid rows={rows} />
+          ) : (
+            <>
+              <VacancyTable rows={rows} menuFor={menuFor} />
+              <VacancyCards rows={rows} menuFor={menuFor} />
             </>
           )}
-        </FiltersButton>
-        }
-      />
-      {/* Phones: the status pills are the ONE tab row (count inside each tab), straight under the search card. */}
-      <div className="mt-3 min-[768px]:hidden [&>div]:mb-0">
-        <ListTabs label="Vacancies by status" tabs={TAB_ORDER.map((t) => ({ key: t, label: TAB_LABEL[t], count: page.tabCounts[t] }))} value={query.tab} onChange={(t) => url.set({ tab: t === "all" ? undefined : t, status: undefined })} />
-      </div>
-      <div className="mt-3.5 min-[768px]:hidden">
-        <PhoneHero hero="Open vacancies" figure={page.tabCounts.open} unit="open" line={`${page.tabCounts.all} vacancies in total`} side={{ value: page.tabCounts.pending, label: "awaiting approval" }} />
-      </div>
-      {/* Desktop and tablet: ONE status pill row (All first, count inside each pill). Phones use the tab row above. */}
-      <div role="group" aria-label="Vacancies by status" className="ap-scrollbar-none mt-4 mb-6 flex gap-2 overflow-x-auto py-0.5 max-[767px]:hidden">
-        {TAB_ORDER.map((t) => {
-          const on = query.tab === t;
-          return (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={on}
-              onClick={() => url.set({ tab: t === "all" ? undefined : t, status: undefined })}
-              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-[13px] font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-(--ap-violet) focus-visible:outline-none ${on ? "border-(--ap-violet) bg-(--ap-violet) text-white" : "border-(--ap-line) bg-(--ap-surface) text-(--ap-ink-2) hover:border-(--ap-violet)"}`}
-            >
-              {TAB_LABEL[t]}
-              <span className={`tabular-nums ${on ? "text-white/80" : "text-(--ap-muted)"}`}>{page.tabCounts[t]}</span>
-            </button>
-          );
-        })}
-      </div>
-      <ActiveChips chips={appliedChips} onClearAll={clearFilters} className="mb-6 max-[767px]:mb-0" />
-      </div>
-      <div className={`@container transition-opacity ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
-        {page.total === 0 ? (
-          anyNarrowing ? (
-            <NoResults
-              noun="vacancies"
-              filters={filterDefs}
-              search={query.search}
-              onClearSearch={() => {
-                setSearchText("");
-                url.set({ q: undefined });
-              }}
-              tab={query.tab !== "all" ? { label: "Status", text: TAB_LABEL[query.tab], onRemove: () => url.set({ tab: undefined, status: undefined, state: undefined }) } : null}
-              onClear={clearAll}
-            />
-          ) : (
-            <div className="py-6">
-              <EmptyState icon={Briefcase} title="No vacancies in this view" description="There are no vacancies to show yet." />
-            </div>
-          )
-        ) : (
-          <>
-            <VacancyTable rows={page.rows} menuFor={menuFor} />
-            <VacancyCards rows={page.rows} menuFor={menuFor} />
-          </>
-        )}
-      </div>
+        </div>
 
-      <ShowMore shown={page.rows.length} total={page.total} onMore={batch.more} onClear={filtersActive ? clearAll : null} />
+        <ShowMore shown={page.rows.length} total={page.total} onMore={batch.more} onClear={filtersActive ? clearAll : null} />
       </section>
     </div>
   );

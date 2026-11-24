@@ -23,7 +23,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalS
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import { setAdminDark, useAdminDark } from "@/lib/admin/theme";
-import { Bell, CalendarCheck, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, Plus, Settings, Sun, UserRound, X } from "@/components/applicant/icons";
+import { Bell, Briefcase, CalendarCheck, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, Plus, Settings, Sun, UserRound, X } from "@/components/applicant/icons";
 import { applyDisplaySettings } from "@/lib/applicant/settings";
 import { ConfirmHost } from "@/components/applicant/ConfirmDialog";
 import { newsreader } from "@/components/applicant/fonts";
@@ -183,6 +183,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const navGroups = withVisibleChildren(pilotFilterGroups(isOpsInHrWorkspace(navRole, pathname) ? OPS_IN_HR_NAV : navGroupsFor(navRole), pilot), authLive, pilot, navRole);
   // Phone More sheet: the People dropdown pages (same filtering as the sidebar).
   const peopleChildren = navGroups.flatMap((g) => g.items).find((i) => i.href === "/admin/people")?.children ?? [];
+  // Phone More sheet: the Recruitment dropdown pages other than Jobs (Jobs is on the bottom bar).
+  const recruitmentChildren = (navGroups.flatMap((g) => g.items).find((i) => i.href === "/admin/jobs")?.children ?? []).filter((c) => c.href !== "/admin/jobs");
 
   return (
     <MotionRoot>
@@ -218,7 +220,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
         )}
 
         {chat ? null : <MobileBottomNav pathname={pathname} counts={counts} onAdd={() => openSheet("add")} onMore={() => openSheet("admin")} moreActive={isNavActive(pathname, "/admin/people") || adminItems.some((i) => isNavActive(pathname, i.href))} />}
-        <MobileSheets sheet={sheet === null || sheet.at !== pathname ? null : sheet.kind} onClose={() => setSheet(null)} counts={counts} session={session} adminItems={adminItems} opsItems={opsItems} peopleChildren={peopleChildren} />
+        <MobileSheets sheet={sheet === null || sheet.at !== pathname ? null : sheet.kind} onClose={() => setSheet(null)} counts={counts} session={session} adminItems={adminItems} opsItems={opsItems} peopleChildren={peopleChildren} recruitmentChildren={recruitmentChildren} />
         <ConfirmHost />
       </div>
     </MotionRoot>
@@ -424,7 +426,7 @@ function Sidebar({ pathname, counts, collapsed, session, role, groups }: { pathn
                 return (
                   <Fragment key={item.href}>
                     {showSection ? <span className="admin-side-label ad-rail-hide mt-2 px-3 text-[11px] opacity-80">{item.section}</span> : null}
-                    <NavDropdown item={item} items={item.children} pathname={pathname} stored={open[`item:${item.href}`]} onSet={(v) => set(`item:${item.href}`, v)} />
+                    <NavDropdown item={item} items={item.children} pathname={pathname} counts={counts} stored={open[`item:${item.href}`]} onSet={(v) => set(`item:${item.href}`, v)} />
                   </Fragment>
                 );
               }
@@ -477,7 +479,7 @@ function Sidebar({ pathname, counts, collapsed, session, role, groups }: { pathn
  * Icon-only rail (collapsed, or tablet width): there is no room for a list, so the row is a link to the first child,
  * shown active on any child page (the shell has no flyout pattern).
  */
-function NavDropdown({ item, items, pathname, stored, onSet }: { item: AdminNavItem; items: AdminNavChild[]; pathname: string; stored: boolean | undefined; onSet: (v: boolean | undefined) => void }) {
+function NavDropdown({ item, items, pathname, counts, stored, onSet }: { item: AdminNavItem; items: AdminNavChild[]; pathname: string; counts: NavCounts; stored: boolean | undefined; onSet: (v: boolean | undefined) => void }) {
   const listId = useId();
   const parentActive = isNavActive(pathname, item.href);
   const activeChild = parentActive ? activeNavChild(pathname, { ...item, children: items }) : null;
@@ -491,6 +493,9 @@ function NavDropdown({ item, items, pathname, stored, onSet }: { item: AdminNavI
     if (inside && stored === false) onSet(undefined);
   }, [pathname, inside, stored, onSet]);
   const Icon = item.icon;
+  // Child badges (e.g. Recruitment > Documentation); the closed row shows their sum so nothing waiting is hidden.
+  const childCount = (c: AdminNavChild) => (c.countKey ? counts[c.countKey] : 0);
+  const closedCount = items.reduce((n, c) => n + childCount(c), 0);
   return (
     <>
       <div className="ad-rail-hide">
@@ -498,6 +503,12 @@ function NavDropdown({ item, items, pathname, stored, onSet }: { item: AdminNavI
           {parentActive && !open ? <motion.span layoutId="admin-nav-pill" transition={SPRING} className="ap-nav-pill absolute -inset-px rounded-xl" aria-hidden="true" /> : null}
           <Icon className="relative size-[20px] shrink-0" aria-hidden="true" />
           <span className="relative flex-1 text-[14px]">{item.label}</span>
+          {!open && closedCount > 0 ? (
+            <span className="ad-badge relative inline-flex h-5 min-w-[22px] items-center justify-center rounded-full bg-[rgba(255,255,255,.9)] px-1.5 text-[13px] font-bold text-(--admin-deep)">
+              <span className="sr-only">{closedCount} waiting: </span>
+              {closedCount}
+            </span>
+          ) : null}
           <ChevronDown className={`relative size-4 shrink-0 opacity-70 transition-transform ${open ? "" : "-rotate-90"}`} aria-hidden="true" />
         </button>
       </div>
@@ -510,6 +521,12 @@ function NavDropdown({ item, items, pathname, stored, onSet }: { item: AdminNavI
                 <Link href={c.href} aria-current={active ? "page" : undefined} className={`${NAV_ITEM} pl-[44px]`}>
                   {active ? <motion.span layoutId="admin-nav-pill" transition={SPRING} className="ap-nav-pill absolute -inset-px rounded-xl" aria-hidden="true" /> : null}
                   <span className="relative flex-1 text-[14px]">{c.label}</span>
+                  {childCount(c) > 0 ? (
+                    <span className="ad-badge relative inline-flex h-5 min-w-[22px] items-center justify-center rounded-full bg-[rgba(255,255,255,.9)] px-1.5 text-[13px] font-bold text-(--admin-deep)">
+                      <span className="sr-only">{childCount(c)} waiting: </span>
+                      {childCount(c)}
+                    </span>
+                  ) : null}
                 </Link>
               </li>
             );
@@ -676,6 +693,7 @@ function DesktopTopbar({ unread, notes, session }: { unread: number; notes: Admi
 
 /** Phone top-bar titles for pages deeper than a nav item (longest prefix wins); anything else uses its nav label. */
 const PAGE_TITLES: [string, string][] = [
+  ["/admin/jobs", "Jobs"],
   ["/admin/recruitment/interviews", "Interviews"],
   ["/admin/recruitment/applicants", "Applicants"],
   ["/admin/staff/directory", "Staff directory"],
@@ -781,7 +799,7 @@ function MobileBottomNav({ pathname, counts, onAdd, onMore, moreActive }: { path
 }
 
 /** Phone sheets: Administration menu and Quick add. */
-function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems, peopleChildren }: { sheet: "admin" | "add" | null; onClose: () => void; counts: NavCounts; session: AdminSession | null; adminItems: AdminNavItem[]; opsItems: AdminNavItem[]; peopleChildren: AdminNavChild[] }) {
+function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems, peopleChildren, recruitmentChildren }: { sheet: "admin" | "add" | null; onClose: () => void; counts: NavCounts; session: AdminSession | null; adminItems: AdminNavItem[]; opsItems: AdminNavItem[]; peopleChildren: AdminNavChild[]; recruitmentChildren: AdminNavChild[] }) {
   const signOut = useSignOut();
   const [invite, setInvite] = useState<InvitationKind | null>(null);
   return (
@@ -821,6 +839,18 @@ function MobileSheets({ sheet, onClose, counts, session, adminItems, opsItems, p
               </Link>
             )}
           </SheetGroup>
+          {recruitmentChildren.length > 0 ? (
+            <SheetGroup heading="Recruitment">
+              {recruitmentChildren.map((c) => (
+                <Link key={c.href} href={c.href} onClick={onClose} className={GROUP_ROW}>
+                  <Briefcase className="size-[19px] shrink-0 text-(--ap-violet)" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                  {c.countKey && counts[c.countKey] > 0 ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-(--ap-tint) px-1.5 text-[13px] font-bold text-(--ap-violet)">{counts[c.countKey]}</span> : null}
+                  <ChevronRight className="size-4 shrink-0 text-(--ap-faint)" aria-hidden="true" />
+                </Link>
+              ))}
+            </SheetGroup>
+          ) : null}
           {opsItems.length > 0 ? (
             <SheetGroup heading="Operations">
               {opsItems.map((item) => (

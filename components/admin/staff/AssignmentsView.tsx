@@ -15,6 +15,7 @@ import { Store } from "@/components/client/icons";
 import { EmptyState, PageHeading } from "@/components/applicant/primitives";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { ListCard, ListToolbar, useBatch } from "@/components/admin/listKit";
+import { rowOpenClick } from "@/components/admin/RowClick";
 import { ShowMore } from "@/components/admin/ShowMore";
 import { cmpIso } from "@/lib/admin/sort";
 import { StatusChip } from "@/components/client/StatusChip";
@@ -172,12 +173,14 @@ export function AssignmentsView() {
 function Row({ r, onReassign, onView }: { r: AssignmentRow; onReassign: () => void; onView: () => void }) {
   const c = r.current;
   return (
-    <li className="min-w-0 border-t border-(--ap-line-2) px-2 py-3 first:border-t-0 @min-[760px]:min-h-[68px]">
+    // Lead 2026-11-24: the whole row opens Assignment details (no separate "View details" button). The name is the
+    // keyboard target (a real button: Enter/Space). Reassign and the History toggle keep their own behaviour.
+    <li onClick={rowOpenClick(onView)} className="ad-clickrow min-w-0 cursor-pointer border-t border-(--ap-line-2) px-2 py-3 first:border-t-0 hover:bg-(--ap-tint-soft) @min-[760px]:min-h-[68px]">
       <div className="flex flex-col gap-3 @min-[760px]:flex-row @min-[760px]:items-center @min-[760px]:gap-5">
         <div className="flex min-w-0 items-center gap-3 @min-[760px]:w-[32%]">
           <AdminAvatar name={r.name} size={40} viewable />
           <div className="min-w-0 leading-tight">
-            <button type="button" onClick={onView} className="block max-w-full truncate text-left text-[15px] font-bold text-(--ap-ink) hover:text-(--ap-violet)">
+            <button type="button" onClick={onView} aria-label={`Open assignment details for ${r.name}`} className="block max-w-full truncate rounded text-left text-[15px] font-bold text-(--ap-ink) hover:text-(--ap-violet) focus-visible:outline-2 focus-visible:outline-(--ap-violet)">
               {r.name}
             </button>
             <span className="mt-0.5 block truncate text-[12px] text-(--ap-faint)" title={r.reference}>{r.reference}</span>
@@ -200,16 +203,13 @@ function Row({ r, onReassign, onView }: { r: AssignmentRow; onReassign: () => vo
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {c ? <StatusChip tone="ok">Current</StatusChip> : null}
-          <button type="button" onClick={onView} className="ap-btn ap-btn-o ap-btn-sm h-10">
-            View details
-          </button>
-          <button type="button" onClick={onReassign} className="ap-btn ap-btn-s ap-btn-sm h-10">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onReassign(); }} className="ap-btn ap-btn-s ap-btn-sm h-10">
             {c ? "Reassign" : "Assign"}
           </button>
         </div>
       </div>
       {r.history.length > 0 ? (
-        <details className="mt-3 border-t border-(--ap-line-2) pt-2.5">
+        <details data-no-row className="mt-3 cursor-auto border-t border-(--ap-line-2) pt-2.5">
           <summary className="cursor-pointer text-[13px] font-bold text-(--ap-violet)">History ({r.history.length})</summary>
           <ul className="mt-2.5 flex flex-col gap-2">
             {r.history.map((h) => (

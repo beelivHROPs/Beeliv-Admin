@@ -15,6 +15,12 @@ import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { StatusChip } from "@/components/client/StatusChip";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { ListCard, ListToolbar } from "@/components/admin/listKit";
+import { rowOpenClick, rowOpenKey } from "@/components/admin/RowClick";
+
+/* Lead 2026-11-24: a row with a document opens the drawer on click / Enter / Space (no separate "View" button).
+   "Review" stays as the call to action when a decision is due. Rows without an openable file stay plain. */
+const OPEN_ROW = "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--ap-violet)";
+const openRow = (canOpen: boolean, open: () => void) => (canOpen ? { tabIndex: 0, onClick: rowOpenClick(open), onKeyDown: rowOpenKey(open) } : {});
 import type { Decision, HrQueueDto, HrQueueRowDto, OpenGrant, ReasonCode, SlotState } from "@/lib/server/staff-documentation/types";
 
 async function call<T>(action: string, body: Record<string, unknown>): Promise<T> {
@@ -122,7 +128,7 @@ export function LiveStaffDocumentsView() {
             ) : (
               <ul className="m-0 list-none p-0">
                 {rows.map((row) => (
-                  <li key={`${row.personId}:${row.slot}`} className="flex min-h-[68px] flex-col gap-2 border-t border-(--ap-line-2) px-2 py-3 first:border-t-0 hover:bg-(--ap-tint-soft) @min-[760px]:flex-row @min-[760px]:items-center @min-[760px]:gap-5">
+                  <li key={`${row.personId}:${row.slot}`} {...openRow(!!row.current && (row.canOpen || row.canDecide), () => { setNotice(""); setSelected(row); })} className={`${row.current && (row.canOpen || row.canDecide) ? OPEN_ROW : ""} flex min-h-[68px] flex-col gap-2 border-t border-(--ap-line-2) px-2 py-3 first:border-t-0 hover:bg-(--ap-tint-soft) @min-[760px]:flex-row @min-[760px]:items-center @min-[760px]:gap-5`}>
                     <div className="flex min-w-0 items-center gap-3 @min-[760px]:w-[34%]">
                       <AdminAvatar name={row.name} size={40} />
                       <div className="min-w-0 leading-tight">
@@ -136,9 +142,9 @@ export function LiveStaffDocumentsView() {
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
                       <StatusChip tone={STATE[row.state]?.tone ?? "mute"}>{STATE[row.state]?.label ?? "Unavailable"}</StatusChip>
-                      {row.current && (row.canOpen || row.canDecide) ? (
+                      {row.current && row.canDecide && row.state === "available" ? (
                         <button type="button" className="ap-btn ap-btn-s ap-btn-sm" onClick={() => { setNotice(""); setSelected(row); }}>
-                          {row.canDecide && row.state === "available" ? "Review" : "View"}
+                          Review
                         </button>
                       ) : null}
                     </div>
@@ -315,15 +321,15 @@ export function LiveStaffDocumentRows({ reference, name }: { reference: string; 
     <>
       <ul className="m-0 list-none p-0">
         {rows.map((row) => (
-          <li key={row.slot} className="flex min-h-[56px] flex-wrap items-center justify-between gap-3 border-t border-(--ap-line-2) px-1 py-3 first:border-t-0">
+          <li key={row.slot} {...openRow(!!row.current && (row.canOpen || row.canDecide), () => setSelected(row))} className={`${row.current && (row.canOpen || row.canDecide) ? `${OPEN_ROW} hover:bg-(--ap-tint-soft)` : ""} flex min-h-[56px] flex-wrap items-center justify-between gap-3 border-t border-(--ap-line-2) px-1 py-3 first:border-t-0`}>
             <div className="min-w-0 leading-tight">
               <b className="block truncate text-[14px]">{row.label}</b>
               {row.current ? <span className="mt-0.5 block text-[13px] text-(--ap-muted)">Version {row.current.version}</span> : null}
             </div>
             <div className="flex items-center gap-3">
               <StatusChip tone={STATE[row.state]?.tone ?? "mute"}>{STATE[row.state]?.label ?? "Unavailable"}</StatusChip>
-              {row.current && (row.canOpen || row.canDecide) ? (
-                <button type="button" className="ap-btn ap-btn-s ap-btn-sm" onClick={() => setSelected(row)}>{row.canDecide && row.state === "available" ? "Review" : "View"}</button>
+              {row.current && row.canDecide && row.state === "available" ? (
+                <button type="button" className="ap-btn ap-btn-s ap-btn-sm" onClick={() => setSelected(row)}>Review</button>
               ) : null}
             </div>
           </li>

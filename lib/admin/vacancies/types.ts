@@ -70,6 +70,8 @@ export interface VacancyRow {
   closesOn: string;
   /** When it was closed / filled / cancelled, if it was. */
   endedAt: ISODateTime | null;
+  /** Pay, when the list read includes it (the live list read does not yet): the Jobs card hides pay when absent. */
+  salary?: Salary;
 }
 
 export interface VacancyActivity {
@@ -167,6 +169,7 @@ export interface VacancyInput extends VacancyContent {
 }
 
 export interface VacancyDetail extends VacancyRow, VacancyContent {
+  salary: Salary;
   allowedActions: VacancyAction[];
   /** False once ended (closed, filled, cancelled) or when the user may not edit. */
   canEdit: boolean;
