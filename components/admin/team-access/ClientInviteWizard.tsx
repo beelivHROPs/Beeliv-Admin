@@ -17,6 +17,7 @@ import { Plus, Trash2 } from "@/components/applicant/icons";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { playAdminSound } from "@/lib/admin/sound";
 import { inviteUser } from "@/lib/admin/team-access/hooks";
+import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 import type { Invitation, TeamFacets } from "@/lib/admin/team-access/types";
 import { Checkbox, InviteLinkResult } from "./InviteParts";
 
@@ -42,6 +43,7 @@ export function ClientWizard({ facets, onClose, onDone, live = false, onUseExist
   const [outlets, setOutlets] = useState<OutletDraft[]>([{ name: "", address: "", city: "" }]);
   const [cName, setCName] = useState("");
   const [cEmail, setCEmail] = useState("");
+  const [cConfirm, setCConfirm] = useState("");
   const [levelId, setLevelId] = useState(live ? (facets.accessLevels[0]?.id ?? "") : "");
   const savedClient = useRef<string | null>(null);
   const [partial, setPartial] = useState(false); // the client is saved; a retry only finishes the rest
@@ -54,8 +56,10 @@ export function ClientWizard({ facets, onClose, onDone, live = false, onUseExist
   const [sent, setSent] = useState<Invitation | null>(null);
 
   const emailOk = /^\S+@\S+\.\S+$/.test(cEmail.trim());
+  const confirmOk = emailsMatch(cEmail, cConfirm);
+  const suggestion = emailTypoSuggestion(cEmail);
   const outletsOk = outlets.length > 0 && outlets.every((o) => o.name.trim() && o.city.trim());
-  const valid = [!!bName.trim() && !!typeId && !!bCity.trim(), outletsOk, !!cName.trim() && emailOk && !!levelId && access.length > 0, true][step];
+  const valid = [!!bName.trim() && !!typeId && !!bCity.trim(), outletsOk, !!cName.trim() && emailOk && confirmOk && !!levelId && access.length > 0, true][step];
   const setOutlet = (i: number, patch: Partial<OutletDraft>) => setOutlets(outlets.map((o, j) => (j === i ? { ...o, ...patch } : o)));
   const removeOutlet = (i: number) => {
     setOutlets(outlets.filter((_, j) => j !== i));
@@ -215,6 +219,22 @@ export function ClientWizard({ facets, onClose, onDone, live = false, onUseExist
           </label>
           <input id={`${uid}-ce`} type="email" className="ap-input mt-1.5" value={cEmail} maxLength={120} onChange={(e) => setCEmail(e.target.value)} aria-invalid={!!cEmail && !emailOk} />
           {cEmail && !emailOk ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Enter a valid email address.</p> : null}
+          <div aria-live="polite">
+            {suggestion ? (
+              <p className="mt-1 text-[13px] text-(--ap-muted)">
+                Did you mean{" "}
+                <button type="button" aria-label={`Use ${suggestion}`} className="font-semibold text-(--ap-violet) underline underline-offset-2" onClick={() => { setCEmail(suggestion); setCConfirm(suggestion); }}>
+                  {suggestion}
+                </button>
+                ?
+              </p>
+            ) : null}
+          </div>
+          <label htmlFor={`${uid}-cec`} className={FIELD_LABEL}>
+            Confirm contact email
+          </label>
+          <input id={`${uid}-cec`} type="email" className="ap-input mt-1.5" value={cConfirm} maxLength={120} autoComplete="off" onChange={(e) => setCConfirm(e.target.value)} aria-invalid={!!cConfirm && !confirmOk} aria-describedby={cConfirm && !confirmOk ? `${uid}-cec-err` : undefined} />
+          {cConfirm && !confirmOk ? <p id={`${uid}-cec-err`} className="mt-1 text-[13px] font-semibold text-(--ap-rose)">The two emails don&apos;t match.</p> : null}
           {live && facets.accessLevels.length <= 1 ? null : <span className={FIELD_LABEL}>Access level</span>}
           {live && facets.accessLevels.length <= 1 ? null : <SelectMenu label="Access level" value={levelId} placeholder="Choose an access level" onChange={setLevelId} options={facets.accessLevels.map((l) => ({ value: l.id, label: l.name }))} className="mt-1.5" />}
           <span className={FIELD_LABEL}>Outlets this person can see</span>

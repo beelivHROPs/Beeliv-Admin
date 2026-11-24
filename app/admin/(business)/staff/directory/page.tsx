@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
-import { redirectToHub } from "@/lib/admin/hub-redirect";
+import { Suspense } from "react";
+import { StaffDirectory } from "@/components/admin/staff/StaffDirectory";
+import { ScopeGate } from "@/components/admin/ScopeNote";
 
 export const metadata: Metadata = { title: "Staff Directory" };
 
-/** This list now lives in the simple hub (keeps any filters in the address). The embedded list component is unchanged. */
-export default function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  return redirectToHub("/admin/people", "staff", searchParams);
+/** Staff directory: its own page under the People dropdown (lead 2026-11-24). Old /admin/people?view=staff links still open the hub. */
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="ap-shimmer h-[320px] rounded-2xl" role="status" aria-busy="true" aria-label="Loading staff" />}>
+      <ScopeGate>
+        <StaffDirectory />
+      </ScopeGate>
+    </Suspense>
+  );
 }

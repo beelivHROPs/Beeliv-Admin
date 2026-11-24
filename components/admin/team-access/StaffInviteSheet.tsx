@@ -15,6 +15,7 @@ import { CancelButton, FIELD_LABEL, PrimaryButton, SheetFrame } from "@/componen
 import { DatePicker } from "@/components/applicant/form-fields";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { findDuplicates, inviteUser } from "@/lib/admin/team-access/hooks";
+import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 import type { DuplicateMatch, Invitation, InvitePrefill, TeamFacets } from "@/lib/admin/team-access/types";
 import { formatDate } from "@/lib/applicant/time";
 import { PhoneInput } from "@/components/applicant/form-fields";
@@ -30,6 +31,7 @@ export function StaffWizard({ facets, prefill, onClose, onDone }: { facets: Team
   const [step, setStep] = useState(0);
   const [name, setName] = useState(prefill?.name ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
+  const [confirmEmail, setConfirmEmail] = useState(prefill?.email ?? "");
   const [phone, setPhone] = useState("");
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [role, setRole] = useState("");
@@ -44,10 +46,12 @@ export function StaffWizard({ facets, prefill, onClose, onDone }: { facets: Team
   const [sent, setSent] = useState<Invitation | null>(null);
 
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
+  const confirmOk = emailsMatch(email, confirmEmail);
+  const suggestion = emailTypoSuggestion(email);
   const outlets = facets.outlets.filter((o) => o.clientId === clientId);
   // Phone is optional here, but when given it must be canonical international (explicit country code).
   const phoneError = validateOptionalAccountPhone(phone);
-  const detailsOk = !!name.trim() && emailOk && !phoneError && !!role && !!clientId && !!outletId && !!start;
+  const detailsOk = !!name.trim() && emailOk && confirmOk && !phoneError && !!role && !!clientId && !!outletId && !!start;
   const exact = (dupes ?? []).filter((d) => d.match === "exact");
   const phoneTaken = (dupes ?? []).some((d) => d.match === "phone");
   const similar = (dupes ?? []).filter((d) => d.match === "similar");
@@ -127,6 +131,22 @@ export function StaffWizard({ facets, prefill, onClose, onDone }: { facets: Team
               </label>
               <input id={`${uid}-e`} type="email" className="ap-input mt-1.5" value={email} maxLength={120} aria-invalid={!!email && !emailOk} onChange={(e) => { setEmail(e.target.value); setDupes(null); }} />
               {email && !emailOk ? <p className="mt-1 text-[13px] font-semibold text-(--ap-rose)">Enter a valid email address.</p> : null}
+              <div aria-live="polite">
+                {suggestion ? (
+                  <p className="mt-1 text-[13px] text-(--ap-muted)">
+                    Did you mean{" "}
+                    <button type="button" aria-label={`Use ${suggestion}`} className="font-semibold text-(--ap-violet) underline underline-offset-2" onClick={() => { setEmail(suggestion); setConfirmEmail(suggestion); setDupes(null); }}>
+                      {suggestion}
+                    </button>
+                    ?
+                  </p>
+                ) : null}
+              </div>
+              <label htmlFor={`${uid}-ec`} className={FIELD_LABEL}>
+                Confirm email address
+              </label>
+              <input id={`${uid}-ec`} type="email" className="ap-input mt-1.5" value={confirmEmail} maxLength={120} autoComplete="off" aria-invalid={!!confirmEmail && !confirmOk} aria-describedby={confirmEmail && !confirmOk ? `${uid}-ec-err` : undefined} onChange={(e) => setConfirmEmail(e.target.value)} />
+              {confirmEmail && !confirmOk ? <p id={`${uid}-ec-err`} className="mt-1 text-[13px] font-semibold text-(--ap-rose)">The two emails don&apos;t match.</p> : null}
             </div>
             <div>
               <label htmlFor={`${uid}-p`} className={FIELD_LABEL}>
