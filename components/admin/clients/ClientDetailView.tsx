@@ -9,6 +9,7 @@
  * Reuses: Disc, StatusChip, listKit rows (whole-row click), the Staff screens'
  * Card / Facts / DataTable / NeedsConfirmation, EmptyState, ClientPageSkeleton / Error.
  */
+import { WhoCanSignIn } from "./WhoCanSignIn";
 import { Can } from "@/components/admin/Can";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -241,7 +242,7 @@ function Overview({ c, go }: { c: ClientDetail; go: (k: TabKey) => void }) {
       <div className="grid grid-cols-1 gap-4 @min-[760px]:grid-cols-2">
         <AssignedHrCard hrUsers={c.hrUsers} history={c.hrHistory} what="client" />
         <Card title="Who can sign in">
-          <p className="text-[14px] leading-snug text-(--ap-ink-2)">{c.accessSummary}</p>
+          <WhoCanSignIn clientName={c.name} summary={c.accessSummary} />
         </Card>
       </div>
     </div>
