@@ -118,8 +118,8 @@ export type AdminCapability =
   | "inbox.triage" // Inbox "Needs a home" (unmatched inbound email). Operations, or a delegated triage owner later (needs Beeliv confirmation); no HR role holds it today.
   | "agreements.publish"; // Draft, preview, publish agreements and policies and read old versions. Head of Operations ONLY (project lead 2026-10-14); HR roles read published text only.
 
-// Lead 2026-11-24 (admin-permissions-hr-autonomy.sql): officers may draft and submit jobs for their assigned clients; a manager publishes.
-export const OFFICER_DENIED: AdminCapability[] = ["vacancy.manage", "lists.manage", "tests.manage", "doctypes.manage", "clients.create", "staff.create", "invitations.manage", "announcements.manage", "content.manage", "leave.decide", "attendance.edit", "journeyTemplates.manage", "journey.edit"];
+// Lead 2026-11-24 (admin-permissions-hr-autonomy.sql, admin-permissions-officer-leave.sql): officers may draft and submit jobs and decide leave for their assigned clients; a manager publishes jobs.
+export const OFFICER_DENIED: AdminCapability[] = ["vacancy.manage", "lists.manage", "tests.manage", "doctypes.manage", "clients.create", "staff.create", "invitations.manage", "announcements.manage", "content.manage", "attendance.edit", "journeyTemplates.manage", "journey.edit"];
 
 /** Capabilities only the Head of Operations holds (not the HR Manager either). */
 export const OPERATIONS_ONLY_CAPS: AdminCapability[] = ["agreements.publish", "inbox.triage"];
