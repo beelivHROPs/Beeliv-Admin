@@ -64,7 +64,8 @@ export const HR_NAV: AdminNavGroup[] = [
           { href: "/admin/staff/directory", label: "Staff directory", also: ["/admin/staff"] },
           { href: "/admin/staff/documents", label: "Documents" },
           { href: "/admin/recruitment/applicants", label: "Applicants" },
-          { href: "/admin/recruitment/talent-pool", label: "Talent pool", liveHidden: true },
+          // Lead 2026-11-25: Talent pool shows the REAL applicants HR moved to the pool (Applicants list, talent pool filter).
+          { href: "/admin/recruitment/applicants?stage=talent-pool", label: "Talent pool" },
         ],
       },
     ],
@@ -87,6 +88,7 @@ export const HR_NAV: AdminNavGroup[] = [
           { href: "/admin/recruitment/client-review", label: "Client review" },
           { href: "/admin/recruitment/offers", label: "Offers" },
           { href: "/admin/recruitment/documentation", label: "Documentation", countKey: "documentation" },
+          { href: "/admin/recruitment/applicants?stage=talent-pool", label: "Talent pool" },
         ],
       },
     ],
