@@ -10,7 +10,7 @@
  * Docs: docs/design-references/admin-staff-detail-2026-10-27.md.
  */
 import Link from "next/link";
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { COVER_ROUND, PD_CTA, PhoneAction, PhoneDetailHead, PhoneStickyAction, initialsOf } from "@/components/admin/PhoneDetail";
 import { ActionsMenu } from "@/components/admin/applicants/ActionsMenu";
@@ -24,6 +24,7 @@ import type { StaffDetail } from "@/lib/admin/staff/types";
 import { useStaffLeaveHistory, useStaffWarnings } from "@/lib/admin/workforce/hooks";
 import { teamAccessMode } from "@/lib/admin/team-access/mode";
 import { LiveSchedulePanel } from "./LiveSchedulePanel";
+import { listAttendance } from "@/lib/admin/workforce/service";
 import { formatDateShort } from "@/lib/applicant/time";
 import { AdminState, reassignHref, STAFF_DIRECTORY_HREF, useUrlParams } from "./parts";
 import { GlanceCard, Pill, StateChip, StatePhonePill, isAwaiting, metricsOf, stateOf } from "./detail-kit";
@@ -81,6 +82,7 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
     : record;
   const [openKey, setOpenKey] = useState<TabKey | null>(null);
   const sectionsRef = useRef<HTMLDivElement>(null);
+  const liveGlance = useLiveGlance(record.id, record.reference);
 
   const state = stateOf(s);
   const awaiting = isAwaiting(s);
@@ -97,21 +99,29 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
   };
 
   const hl = leave.data;
+  const livePending = liveGlance ? (hl?.requests ?? []).filter((q) => q.status === "pending").reduce((n, q) => n + q.days, 0) : 0;
   const lv: { value: ReactNode; unit?: string; caption: string } | null =
-    m.leave.pendingDays > 0
-      ? { value: m.leave.pendingDays, unit: m.leave.pendingDays === 1 ? "day" : "days", caption: hl?.balance ? `pending approval · ${hl.balance.remaining} ${hl.balance.unit} left` : "pending approval" }
+    m.leave.pendingDays > 0 || livePending > 0
+      ? { value: Math.max(m.leave.pendingDays, livePending), unit: Math.max(m.leave.pendingDays, livePending) === 1 ? "day" : "days", caption: hl?.balance ? `pending approval · ${hl.balance.remaining} ${hl.balance.unit} left` : "pending approval" }
       : hl?.balance
         ? { value: hl.balance.remaining, unit: hl.balance.unit, caption: "leave balance" }
         : hl && hl.takenThisYear > 0
           ? { value: hl.takenThisYear, unit: hl.takenThisYear === 1 ? "day" : "days", caption: "taken this year" }
-          : null;
+          : liveGlance && hl
+            ? { value: 0, unit: "days", caption: "taken this year" }
+            : null;
 
   const nMissing = s.documents.filter((d) => d.state === "missing").length;
   const nRejected = s.documents.filter((d) => d.state === "rejected").length;
   const docIssues = m.docs.broken > 0 ? [nMissing ? `${nMissing} missing` : "", nRejected ? `${nRejected} rejected` : ""].filter(Boolean).join(", ") : m.docs.review > 0 ? `${m.docs.review} to review` : null;
 
   /* LEVEL 2: a card only when its data exists. */
+  const la = liveGlance?.att ?? null;
+  const ld = liveGlance?.docs ?? null;
   const glance = [
+    la && la.counted > 0 && !(s.attendance.length > 0 && m.att.pct !== null) ? (
+      <GlanceCard key="att-live" icon={CalendarCheck} tile="bg-[#2f9e5b]" title="Attendance" value={`${la.pct}%`} caption={`on time, last ${la.counted} ${la.counted === 1 ? "shift" : "shifts"}`} progress={la.pct / 100} tone={la.absent > 0 ? "warn" : "normal"} chip={la.absent > 0 ? `${la.absent} missed` : null} label={`Attendance, ${la.pct}% on time. Open attendance`} onClick={() => open("attendance")} />
+    ) : null,
     s.attendance.length > 0 && m.att.pct !== null ? (
       <GlanceCard key="att" icon={CalendarCheck} tile="bg-[#2f9e5b]" title="Attendance" value={`${m.att.pct}%`} caption={`on time, last ${m.att.counted} ${m.att.counted === 1 ? "shift" : "shifts"}`} progress={m.att.pct / 100} label={`Attendance, ${m.att.pct}% on time. Open attendance`} onClick={() => open("attendance")} />
     ) : null,
@@ -130,6 +140,22 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
         chip={m.training.notYet > 0 ? `${m.training.notYet} not yet done` : null}
         label={`Training and SOPs, ${m.training.done} of ${m.training.total} completed. Open training`}
         onClick={() => open("training")}
+      />
+    ) : null,
+    ld && ld.total > 0 && m.docs.total === 0 ? (
+      <GlanceCard
+        key="docs-live"
+        icon={FileCheck2}
+        tile="bg-[#5b8fd0]"
+        title="Documents"
+        value={ld.valid}
+        unit={`of ${ld.total}`}
+        caption="verified"
+        progress={ld.valid / ld.total}
+        tone={ld.missing > 0 ? "bad" : ld.review > 0 ? "warn" : "normal"}
+        chip={ld.missing > 0 ? `${ld.missing} missing` : ld.review > 0 ? `${ld.review} to review` : null}
+        label={`Documents, ${ld.valid} of ${ld.total} verified. Open documents`}
+        onClick={() => open("documents")}
       />
     ) : null,
     m.docs.total > 0 ? (
@@ -325,4 +351,41 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
       </div>
     </div>
   );
+}
+
+/**
+ * Live "At a glance" numbers (lead 2026-11-25): attendance from this person's real check-ins over the last 30 days
+ * (present / late / absent; shifts still to come are not counted) and documents from the real staff-document queue.
+ * Preview mode returns null, so the record's own sample numbers keep driving the cards there.
+ */
+function useLiveGlance(staffId: string, reference: string) {
+  const live = teamAccessMode() === "live";
+  const [data, setData] = useState<{ att: { pct: number; counted: number; absent: number } | null; docs: { total: number; valid: number; missing: number; review: number } | null } | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    const now = new Date();
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const from = iso(new Date(now.getTime() - 30 * 86_400_000));
+    const att = listAttendance({ search: "", tab: "all", from, to: iso(now), clientId: "", outletId: "", pageSize: 1000 })
+      .then((page) => {
+        const mine = page.rows.filter((row) => row.staff.id === staffId && (row.status === "present" || row.status === "late" || row.status === "absent"));
+        const onTime = mine.filter((row) => row.status === "present").length;
+        return mine.length ? { pct: Math.round((onTime / mine.length) * 100), counted: mine.length, absent: mine.filter((row) => row.status === "absent").length } : null;
+      })
+      .catch(() => null);
+    const docs = reference
+      ? fetch("/api/admin/staff-documentation/hr-queue", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", cache: "no-store", body: JSON.stringify({ page: 1, pageSize: 50, state: "", search: reference.slice(0, 80) }) })
+          .then(async (res) => {
+            const j = (await res.json().catch(() => null)) as { ok?: boolean; value?: { items?: { reference?: string; state?: string }[] } } | null;
+            const items = (j?.ok && j.value?.items ? j.value.items : []).filter((it) => it.reference === reference);
+            if (!items.length) return null;
+            return { total: items.length, valid: items.filter((it) => it.state === "verified").length, missing: items.filter((it) => it.state === "requested").length, review: items.filter((it) => it.state === "available").length };
+          })
+          .catch(() => null)
+      : Promise.resolve(null);
+    Promise.all([att, docs]).then(([a, d]) => { if (!cancelled) setData({ att: a, docs: d }); });
+    return () => { cancelled = true; };
+  }, [live, staffId, reference]);
+  return live ? (data ?? { att: null, docs: null }) : null;
 }
