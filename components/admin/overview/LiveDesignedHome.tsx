@@ -9,8 +9,9 @@ import { useLiveAdminProfile } from "@/lib/admin/ops/identity";
 import { Flat, FlatEmpty, FLAT_BOX, rowLine } from "./Flat";
 import { PipelineFlat, VacanciesFlat, TalentFlat, ActivityFlat } from "./HomeDesktop";
 import { AttendancePanel, DepartmentPanel, TasksPanel } from "./Interactive";
-import { listApplicants } from "@/lib/admin/applicants/service";
-import { listVacancies } from "@/lib/admin/vacancies/service";
+// LIVE sources only (never the sample services, which fall back to fixtures): lead 2026-11-25 "remove the mock data".
+import { liveApplicantsAdapter } from "@/lib/admin/applicants/live";
+import { liveVacancyAdapter } from "@/lib/admin/vacancies/live";
 import { listAttendance } from "@/lib/admin/workforce/service";
 import type { HrOverview } from "@/lib/admin/types";
 import { HOME_METRICS, homeMetricNote, homeMetricText, parseHomeSummary, type HomeMetric, type HomeMetricKey, type HomeSummary } from "./live-home-model";
@@ -50,8 +51,8 @@ async function readCards(): Promise<LiveCards> {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const now = new Date();
   const [apps, vacs, att] = await Promise.all([
-    listApplicants({ search: "", tab: "all", stage: "", vacancyId: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 500 }).catch(() => null),
-    listVacancies({ search: "", tab: "all", status: "", department: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 200 } as never).catch(() => null),
+    liveApplicantsAdapter.listApplicants({ search: "", tab: "all", stage: "", vacancyId: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 500 }).catch(() => null),
+    (process.env.NEXT_PUBLIC_VACANCIES_BACKEND_ENABLED === "true" ? liveVacancyAdapter.listVacancies({ search: "", tab: "all", status: "", department: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 200 } as never) : Promise.resolve(null)).catch(() => null),
     listAttendance({ search: "", tab: "all", from: iso(new Date(now.getTime() - 6 * 86_400_000)), to: iso(now), clientId: "", outletId: "", pageSize: 2000 }).catch(() => null),
   ]);
   const rows = apps?.rows ?? [];
