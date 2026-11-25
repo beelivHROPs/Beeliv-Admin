@@ -7,6 +7,12 @@ import { listInvitations } from "@/lib/auth/service";
 import type { InvitationListItem } from "@/lib/auth/invitation-management-wire";
 import { useLiveAdminProfile } from "@/lib/admin/ops/identity";
 import { Flat, FlatEmpty, FLAT_BOX, rowLine } from "./Flat";
+import { PipelineFlat, VacanciesFlat, TalentFlat, ActivityFlat } from "./HomeDesktop";
+import { AttendancePanel, DepartmentPanel, TasksPanel } from "./Interactive";
+import { listApplicants } from "@/lib/admin/applicants/service";
+import { listVacancies } from "@/lib/admin/vacancies/service";
+import { listAttendance } from "@/lib/admin/workforce/service";
+import type { HrOverview } from "@/lib/admin/types";
 import { HOME_METRICS, homeMetricNote, homeMetricText, parseHomeSummary, type HomeMetric, type HomeMetricKey, type HomeSummary } from "./live-home-model";
 import "./calm.css";
 
@@ -34,8 +40,49 @@ async function readHome(): Promise<State> {
 }
 
 /** The approved Home presentation, fed only by the caller's scoped live services. */
+/**
+ * Live data for the approved Home cards (lead 2026-11-25: "use the local chart and designs", no "Not connected yet").
+ * Each part loads on its own; a part that cannot load stays empty (approved empty state), never sample data.
+ */
+type LiveCards = { pipeline: HrOverview["pipeline"]; departments: HrOverview["applicantsByDepartment"]; vacancies: HrOverview["vacancies"]; attendance: HrOverview["attendance"]; talent: HrOverview["talentPool"] };
+const EMPTY_CARDS: LiveCards = { pipeline: [], departments: [], vacancies: [], attendance: [], talent: { count: 0, topSkills: [] } };
+async function readCards(): Promise<LiveCards> {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  const [apps, vacs, att] = await Promise.all([
+    listApplicants({ search: "", tab: "all", stage: "", vacancyId: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 500 }).catch(() => null),
+    listVacancies({ search: "", tab: "all", status: "", department: "", clientId: "", recruiterId: "", sort: "newest", page: 1, pageSize: 200 } as never).catch(() => null),
+    listAttendance({ search: "", tab: "all", from: iso(new Date(now.getTime() - 6 * 86_400_000)), to: iso(now), clientId: "", outletId: "", pageSize: 2000 }).catch(() => null),
+  ]);
+  const rows = apps?.rows ?? [];
+  const vrows = (vacs as { rows?: { id: string; title: string; department: string; client: { name: string }; outlet: { name: string } | null; status: string; counts: { applications: number } | null }[] } | null)?.rows ?? [];
+  const deptOf = new Map(vrows.map((v) => [v.id, v.department || "Other"]));
+  const stageCounts = new Map<number, number>();
+  for (const a of rows) if (a.status === "active" || a.status === "hold") stageCounts.set(a.stage, (stageCounts.get(a.stage) ?? 0) + 1);
+  const depts = new Map<string, number>();
+  for (const a of rows) { const d = deptOf.get(a.vacancyId) ?? "Other"; depts.set(d, (depts.get(d) ?? 0) + 1); }
+  const days: HrOverview["attendance"][number]["days"] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86_400_000); const key = iso(d);
+    const mine = (att?.rows ?? []).filter((r) => r.date === key);
+    days.push({ id: key, label: d.toLocaleDateString("en-GB", { weekday: "short" }), sub: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      title: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+      present: mine.filter((r) => r.status === "present").length, late: mine.filter((r) => r.status === "late").length,
+      absent: mine.filter((r) => r.status === "absent").length, onLeave: mine.filter((r) => r.status === "on-leave").length } as never);
+  }
+  return {
+    pipeline: [...stageCounts].sort((a, b) => a[0] - b[0]).map(([stage, count]) => ({ stage, count })),
+    departments: [...depts].map(([label, count]) => ({ id: label, label, count })),
+    vacancies: vrows.filter((v) => !["closed", "filled", "cancelled"].includes(v.status)).slice(0, 6).map((v) => ({ id: v.id, title: v.title, department: v.department, outlet: [v.client.name, v.outlet?.name].filter(Boolean).join(", "), applicants: v.counts?.applications ?? 0, status: v.status as never })),
+    attendance: [{ id: "week", label: "Last 7 days", days }],
+    talent: { count: rows.filter((a) => a.inTalentPool).length, topSkills: [] },
+  };
+}
+
 export function LiveDesignedHome({ variant }: { variant: "hr" | "ops" }) {
   const profile = useLiveAdminProfile();
+  const [cards, setCards] = useState<LiveCards>(EMPTY_CARDS);
+  useEffect(() => { let off = false; void readCards().then((c) => { if (!off) setCards(c); }); return () => { off = true; }; }, []);
   const [state, setState] = useState<State>(INITIAL);
   const generation = useRef(0);
   const load = useCallback(() => {
@@ -84,19 +131,19 @@ export function LiveDesignedHome({ variant }: { variant: "hr" | "ops" }) {
         <div className="grid grid-cols-1 gap-6 min-[768px]:grid-cols-2 min-[1241px]:grid-cols-12">
           <RecentInvitations items={state.invitations} loading={state.status === "loading"} className="min-[768px]:col-span-2 min-[1241px]:col-span-8" />
           <Unavailable title="Needs attention" className="min-[768px]:col-span-2 min-[1241px]:col-span-4" />
-          <Unavailable title="Recruitment pipeline" className="min-[768px]:col-span-2 min-[1241px]:col-span-5" />
-          <Unavailable title="Applicants by department" className="min-[1241px]:col-span-3" />
-          <Unavailable title="Attendance" className="min-[1241px]:col-span-4" />
-          <Unavailable title="Vacancies" className="min-[768px]:col-span-2 min-[1241px]:col-span-8" />
-          <Unavailable title="Tasks" className="min-[1241px]:col-span-4" />
-          <Unavailable title="Recent activity" className="min-[768px]:col-span-2 min-[1241px]:col-span-8" />
-          <div className="flex flex-col gap-6 min-[768px]:col-span-2 min-[1241px]:col-span-4"><Placement summary={state.summary} /><Clients summary={state.summary} /><Unavailable title="Talent pool" /></div>
+          <PipelineFlat pipeline={cards.pipeline} className="min-[768px]:col-span-2 min-[1241px]:col-span-5" />
+          <DepartmentPanel items={cards.departments} className="min-[1241px]:col-span-3" />
+          <AttendancePanel periods={cards.attendance} className="min-[1241px]:col-span-4" />
+          <VacanciesFlat items={cards.vacancies} className="min-[768px]:col-span-2 min-[1241px]:col-span-8" />
+          <TasksPanel tasks={[]} className="min-[1241px]:col-span-4" />
+          <ActivityFlat items={[]} className="min-[768px]:col-span-2 min-[1241px]:col-span-8" />
+          <div className="flex flex-col gap-6 min-[768px]:col-span-2 min-[1241px]:col-span-4"><Placement summary={state.summary} /><Clients summary={state.summary} /><TalentFlat summary={cards.talent} /></div>
         </div>
       </div> : <div className="ops-calm hidden flex-col gap-6 pb-24 min-[768px]:flex">
         <Greeting firstName={firstName} />
         <StatStrip summary={state.summary} />
         <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-12"><Needs summary={state.summary} className="min-[1100px]:col-span-7" /><Placement summary={state.summary} className="min-[1100px]:col-span-5" /></div>
-        <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-12"><Clients summary={state.summary} className="min-[1100px]:col-span-8" /><Unavailable title="Recruitment snapshot" className="min-[1100px]:col-span-4" /></div>
+        <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-12"><Clients summary={state.summary} className="min-[1100px]:col-span-8" /><PipelineFlat pipeline={cards.pipeline} className="min-[1100px]:col-span-4" /></div>
         <div className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-12"><RecentInvitations items={state.invitations} loading={state.status === "loading"} className="min-[1100px]:col-span-7" /><Unavailable title="HR workload" className="min-[1100px]:col-span-5" /></div>
       </div>}
     </div>
@@ -137,5 +184,11 @@ function Clients({ summary, className = "" }: { summary: HomeSummary | null; cla
   return <Flat title="Clients and outlets" href="/admin/clients" className={className}><p className="py-2 text-[14px] text-(--ap-ink)"><b className="font-semibold tabular-nums">{homeMetricText(summary?.activeClients)}</b> active clients <span className="text-(--ap-muted)">&middot; {homeMetricNote(summary?.activeClients)}</span></p><p className="py-2 text-[14px] text-(--ap-ink)"><b className="font-semibold tabular-nums">{homeMetricText(summary?.activeOutlets)}</b> active outlets <span className="text-(--ap-muted)">&middot; {homeMetricNote(summary?.activeOutlets)}</span></p></Flat>;
 }
 function Unavailable({ title, className = "" }: { title: string; className?: string }) {
-  return <Flat title={title} className={className}><FlatEmpty title="Not connected yet" description="Current records will appear here when this feature is available." /></Flat>;
+  // Approved calm empty state (lead 2026-11-25: never "Not connected yet" on live).
+  const copy: Record<string, [string, string]> = {
+    "Needs attention": ["Nothing needs attention", "Items that need your action show here."],
+    "HR workload": ["No HR workload yet", "Open work per HR officer shows here as requests and applicants arrive."],
+  };
+  const [t, d] = copy[title] ?? ["Nothing here yet", "This fills in as records are added."];
+  return <Flat title={title} className={className}><FlatEmpty title={t} description={d} /></Flat>;
 }
