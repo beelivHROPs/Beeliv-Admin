@@ -122,10 +122,17 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
     la && la.counted > 0 && !(s.attendance.length > 0 && m.att.pct !== null) ? (
       <GlanceCard key="att-live" icon={CalendarCheck} tile="bg-[#2f9e5b]" title="Attendance" value={`${la.pct}%`} caption={`on time, last ${la.counted} ${la.counted === 1 ? "shift" : "shifts"}`} progress={la.pct / 100} tone={la.absent > 0 ? "warn" : "normal"} chip={la.absent > 0 ? `${la.absent} missed` : null} label={`Attendance, ${la.pct}% on time. Open attendance`} onClick={() => open("attendance")} />
     ) : null,
+    // Live with no worked shifts yet: same card as localhost, honest "nothing yet" value.
+    liveGlance && !(la && la.counted > 0) && !(s.attendance.length > 0 && m.att.pct !== null) ? (
+      <GlanceCard key="att-none" icon={CalendarCheck} tile="bg-[#2f9e5b]" title="Attendance" value="—" caption="no shifts worked yet" label="Attendance, no shifts worked yet. Open attendance" onClick={() => open("attendance")} />
+    ) : null,
     s.attendance.length > 0 && m.att.pct !== null ? (
       <GlanceCard key="att" icon={CalendarCheck} tile="bg-[#2f9e5b]" title="Attendance" value={`${m.att.pct}%`} caption={`on time, last ${m.att.counted} ${m.att.counted === 1 ? "shift" : "shifts"}`} progress={m.att.pct / 100} label={`Attendance, ${m.att.pct}% on time. Open attendance`} onClick={() => open("attendance")} />
     ) : null,
     lv ? <GlanceCard key="leave" icon={Sun} tile="bg-[#7a5cb0]" title="Leave" value={lv.value} unit={lv.unit} caption={lv.caption} label={`Leave, ${lv.value} ${lv.unit ?? ""} ${lv.caption}. Open leave`} onClick={() => open("leave")} /> : null,
+    liveGlance && m.training.total === 0 ? (
+      <GlanceCard key="train-none" icon={Award} tile="bg-[#c98a1b]" title="Training and SOPs" value="—" caption="no training assigned yet" label="Training and SOPs, none assigned yet. Open training" onClick={() => open("training")} />
+    ) : null,
     m.training.total > 0 ? (
       <GlanceCard
         key="train"
@@ -141,6 +148,9 @@ function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; 
         label={`Training and SOPs, ${m.training.done} of ${m.training.total} completed. Open training`}
         onClick={() => open("training")}
       />
+    ) : null,
+    liveGlance && !(ld && ld.total > 0) && m.docs.total === 0 ? (
+      <GlanceCard key="docs-none" icon={FileCheck2} tile="bg-[#5b8fd0]" title="Documents" value="—" caption="no documents uploaded yet" label="Documents, none uploaded yet. Open documents" onClick={() => open("documents")} />
     ) : null,
     ld && ld.total > 0 && m.docs.total === 0 ? (
       <GlanceCard
