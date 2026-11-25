@@ -21,6 +21,7 @@ import type { JourneyTemplate } from "@/lib/admin/journey-templates/types";
 import { roleCan, useAccessRole } from "@/lib/admin/role-access";
 import { timeAgo } from "@/lib/client/format";
 import { journeySummary } from "@/lib/journeys/types";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 export const TEMPLATES_HREF = "/admin/lists/job-templates";
 const SMALL = "inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] border border-(--ap-line) px-3 text-[13px] font-semibold text-(--ap-ink-2) hover:bg-(--ap-line-2) disabled:opacity-40";
@@ -87,8 +88,8 @@ export function TemplatesList() {
       if (what === "duplicate") await duplicateJourneyTemplate(t.id);
       else await archiveJourneyTemplate(t.id, what === "archive");
       setNotice({ tone: "ok", text: what === "duplicate" ? `${t.name} was duplicated.` : what === "archive" ? `${t.name} was deleted. You can restore it below.` : `${t.name} was restored.` });
-    } catch {
-      setNotice({ tone: "bad", text: "We could not do that. Nothing was changed. Please try again." });
+    } catch (e) {
+      setNotice({ tone: "bad", text: explainCaught(e, "We could not do that. Nothing was changed. Please try again.") });
     }
     setBusy(null);
   }

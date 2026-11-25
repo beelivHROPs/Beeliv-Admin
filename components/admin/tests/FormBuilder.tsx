@@ -26,6 +26,7 @@ import { QuestionEditor, blankQuestion, normaliseQuestion, newId, type QuestionE
 import { Choice, FoldSection as Section, MoreOptions, PhoneFormBody, PhoneFormHead } from "@/components/admin/PhoneForm";
 import { AUDIENCE_LABEL, BackLink, DetailSkeleton, FormStatusChip, KindChip, Notice, Restricted, formHref, resultsHref, isChoice } from "./parts";
 import { TESTS_HREF } from "./parts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 export function FormBuilder({ id }: { id: string | null }) {
   const live = useFormRecord(id);
@@ -190,8 +191,8 @@ function Body({ initial, submissionCount, departments, clients }: { initial: For
       setMeta({ id: f.id, status: f.status, version: f.version });
       setSaved(JSON.stringify(toInput(toDraft(f))));
       return f;
-    } catch {
-      setNotice({ kind: "error", text: "We could not save. Nothing was changed. Please try again." });
+    } catch (e) {
+      setNotice({ kind: "error", text: explainCaught(e, "We could not save. Nothing was changed. Please try again.") });
       return null;
     } finally {
       setBusy(false);

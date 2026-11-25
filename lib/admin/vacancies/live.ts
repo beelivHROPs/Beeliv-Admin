@@ -1,6 +1,7 @@
 /** Gated HTTP adapter. Reads and writes never fall back to fixtures. */
 import type { VacancyAdapter } from './adapter';
 import { RestrictedError } from '../adapter';
+import { explainError, isKnownErrorCode } from '../../shared/error-messages';
 import { VacancyValidationError, type VacancyDetail } from './types';
 import { readVacancies } from './read-client';
 import { submitVacancyCommand } from './write-client';
@@ -15,7 +16,8 @@ export function createLiveVacancyAdapter(fetcher: typeof fetch = fetch): Vacancy
   const result = await readVacancies(request,fetcher);
   if (!result.ok) {
    if (['no_access','forbidden'].includes(result.code)) throw new RestrictedError();
-   throw new Error('Vacancies could not be loaded. Please try again.');
+   // A known reason (session ended, too many attempts, ...) is explained; otherwise the load wording stays.
+   throw new Error(result.code!=='unavailable'&&isKnownErrorCode(result.code)?explainError(result.code,'vacancy'):'Vacancies could not be loaded. Please try again.');
   }
   return result;
  };
@@ -40,7 +42,7 @@ export function createLiveVacancyAdapter(fetcher: typeof fetch = fetch): Vacancy
   if(!result.ok){
    if(result.fields)throw new VacancyValidationError(result.fields);
    if(result.code==='no_access'||result.code==='forbidden')throw new RestrictedError();
-   const message=result.code==='outcome_unknown'?'We could not confirm the save. Retry the same change or reload to check.':result.code==='conflict'?'This vacancy changed. Reload it before saving again.':'The vacancy could not be saved. Check your access and try again.';
+   const message=result.code==='outcome_unknown'?'We could not confirm the save. Retry the same change or reload to check.':result.code==='conflict'?'This vacancy changed. Reload it before saving again.':isKnownErrorCode(result.code)&&result.code!=='unavailable'?explainError(result.code,'vacancy'):'The vacancy could not be saved. Please try again in a moment.';
    throw new Error(message);
   }
   confirmed={signature,id:result.id};

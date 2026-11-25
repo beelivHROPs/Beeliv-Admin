@@ -10,6 +10,7 @@
  * When the backend is not switched on (`unavailable`) the screens get the approved empty state, never sample data.
  */
 import { RestrictedError, type AdapterEvent } from "../adapter";
+import { ExplainedError, explainError, networkError } from "../../shared/error-messages";
 import type { InterviewsAdapter } from "./adapter";
 import type {
   InterviewDetail,
@@ -42,13 +43,18 @@ type HistoryDto = { history: { action: string; at: string; note: string | null; 
 class Unavailable extends Error {}
 
 async function call<T>(action: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`/api/admin/applications/${action}`, {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/applications/${action}`, {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw networkError();
+  }
   const json = (await res.json().catch(() => null)) as ({ ok?: boolean; error?: { code?: string; message?: string } } & Record<string, unknown>) | null;
   if (json?.ok === true) {
     const { ok: _ok, ...rest } = json;
@@ -58,7 +64,8 @@ async function call<T>(action: string, body: Record<string, unknown>): Promise<T
   const code = json?.error?.code ?? "unavailable";
   if (code === "forbidden" || code === "unauthenticated") throw new RestrictedError();
   if (code === "unavailable") throw new Unavailable("unavailable");
-  throw Object.assign(new Error(typeof json?.error?.message === "string" ? json.error.message : "This could not be saved. Please try again."), { code });
+  // Our own wording (lib/shared/error-messages.ts), never the server's text.
+  throw new ExplainedError(code, explainError(code, "interview"));
 }
 
 /* ---------- the six live score points (lead decision 2026-11-24) ---------- */

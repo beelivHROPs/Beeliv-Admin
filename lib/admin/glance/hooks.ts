@@ -6,6 +6,7 @@ import { RestrictedError } from "../adapter";
 import type { LoadStatus } from "../types";
 import * as service from "./service";
 import type { GlanceData, GlanceScope } from "./types";
+import { noteLoadFailure } from "../../shared/load-failure";
 
 type Result = { key: string; data: GlanceData | null; failed: "error" | "restricted" | null };
 
@@ -23,7 +24,7 @@ export function useGlance(scope: GlanceScope): { data: GlanceData | null; status
     let cancelled = false;
     service.getGlance(scope).then(
       (data) => !cancelled && setResult({ key, data, failed: null }),
-      (e: unknown) => !cancelled && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => !cancelled && noteLoadFailure(e) && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
     );
     return () => {
       cancelled = true;

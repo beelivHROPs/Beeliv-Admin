@@ -8,6 +8,7 @@
  * backend exists.
  */
 import { RestrictedError, type AdapterEvent } from "../adapter";
+import { ExplainedError, explainError, networkError } from "../../shared/error-messages";
 import { listApplicationInterviews } from "../interviews/live";
 import { RECOMMENDATION_LABEL, OUTCOME_LABEL } from "../interviews/types";
 import { getAdminIdentity } from "../ops/identity";
@@ -51,13 +52,18 @@ type HistoryDto = {
 };
 
 async function call<T>(action: "list" | "read" | "act" | "history" | "verify" | "decide", body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`/api/admin/applications/${action}`, {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/applications/${action}`, {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw networkError();
+  }
   const json = (await res.json().catch(() => null)) as ({ ok?: boolean; error?: { code?: string } } & Record<string, unknown>) | null;
   if (json?.ok === true) {
     const { ok: _ok, ...rest } = json;
@@ -66,8 +72,8 @@ async function call<T>(action: "list" | "read" | "act" | "history" | "verify" | 
   }
   const code = json?.error?.code;
   if (code === "forbidden" || code === "unauthenticated") throw new RestrictedError();
-  const message = (json?.error as { message?: unknown } | undefined)?.message;
-  throw Object.assign(new Error(typeof message === "string" ? message : "This could not be saved. Please try again."), { code: code ?? "unavailable" });
+  // Our own wording (lib/shared/error-messages.ts), never the server's text.
+  throw new ExplainedError(code ?? "unavailable", explainError(code ?? "unavailable", "application"));
 }
 
 /* ---------- mapping ---------- */
@@ -336,7 +342,8 @@ export const liveApplicantsAdapter: ApplicantsAdapter = {
       return toDetail(d, h, iv);
     } catch (e) {
       if (e instanceof RestrictedError) throw e;
-      if (e instanceof Error && (e.message === "invalid_request" || e.message === "not_found")) return null;
+      const code = e instanceof Error ? ((e as Error & { code?: string }).code ?? e.message) : "";
+      if (code === "invalid_request" || code === "not_found") return null;
       throw e;
     }
   },

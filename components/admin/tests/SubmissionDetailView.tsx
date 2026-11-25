@@ -24,6 +24,7 @@ import type { SubmissionDetail } from "@/lib/admin/tests/adapter";
 import { autoMark, SAMPLE_DEPARTMENTS } from "@/lib/admin/tests/store";
 import type { FormSubmission } from "@/lib/forms/types";
 import { AUDIENCE_LABEL, BackLink, DetailSkeleton, Notice, RECO_LABEL, Restricted, Section, SubmissionChip, applicantProfileHref, resultsHref } from "./parts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 type Reco = NonNullable<FormSubmission["recommendation"]>;
 const NONE = "__none";
@@ -96,8 +97,8 @@ function Detail({ d, back, onSaved }: { d: SubmissionDetail; back: React.ReactNo
     try {
       onSaved(await saveMarks(s.id, next, reco === NONE ? null : (reco as Reco)));
       setNotice({ kind: "ok", text: "Saved. It is recorded in the history below." });
-    } catch {
-      setNotice({ kind: "error", text: "We could not save. Nothing was changed. Please try again." });
+    } catch (e) {
+      setNotice({ kind: "error", text: explainCaught(e, "We could not save. Nothing was changed. Please try again.") });
     } finally {
       setBusy(false);
     }

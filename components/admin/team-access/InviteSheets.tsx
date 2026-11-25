@@ -29,6 +29,7 @@ import { JOB_TITLE_MAX, type Invitation, type InvitationKind, type InvitePrefill
 import { ClientWizard } from "./ClientInviteWizard";
 import { StaffWizard } from "./StaffInviteSheet";
 import { Checkbox, InviteLinkResult } from "./InviteParts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 export const INVITE_TITLE: Record<InvitationKind, string> = { internal: "Invite internal user", client: "Invite client user", staff: "Invite staff member" };
 const INTRO: Record<InvitationKind, string> = {
@@ -118,7 +119,7 @@ function InviteForm({ kind, prefill, facets, onClose, onDone }: { kind: Invitati
       playAdminSound("saved"); // invitation created (the confirmation screen is already showing)
       onDone?.(inv);
     } catch (e) {
-      setError(e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation. Resend or revoke the existing invitation instead." : "We could not confirm the invitation. Check Invitations before trying again.");
+      setError(explainCaught(e, "We could not confirm the invitation. Check Invitations before trying again.", "invite"));
     } finally {
       setBusy(false);
     }

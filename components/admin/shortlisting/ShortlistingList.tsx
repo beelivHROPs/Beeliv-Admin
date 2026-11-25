@@ -28,6 +28,7 @@ import { applicantHref } from "@/lib/admin/links";
 import { bulkScreeningAction, useShortlisting } from "@/lib/admin/shortlisting/hooks";
 import { SHORTLIST_SORTS, type BulkAction, type DocumentsFilter, type ExperienceFilter, type FitLabel, type ScreeningRow, type ScreeningStatus, type ScreeningTab, type ShortlistingPage, type ShortlistingQuery } from "@/lib/admin/shortlisting/types";
 import { ListSkeleton, NoteSheet, NoticeBanner, RestrictedPanel, type Notice } from "@/components/admin/interviews/ui";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const ANY = "__any";
 const withAny = (label: string, opts: string[]) => [{ value: ANY, label }, ...opts.map((o) => ({ value: o, label: o }))];
@@ -174,8 +175,8 @@ export function ShortlistingList() {
       setSelected(new Set());
       setSheet(null);
       live.retry();
-    } catch {
-      setNotice({ kind: "error", text: "That action could not be completed. Nothing was changed. Please try again." });
+    } catch (e) {
+      setNotice({ kind: "error", text: explainCaught(e, "That action could not be completed. Nothing was changed. Please try again.", "application") });
       setSheet(null);
     } finally {
       setBusy(false);

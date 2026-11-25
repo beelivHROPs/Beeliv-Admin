@@ -10,6 +10,7 @@ import { createAccessLink, sendInvitation } from "@/lib/admin/team-access/hooks"
 import type { AccessLink, Invitation } from "@/lib/admin/team-access/types";
 
 import { AccessLinkSheet } from "./AccessLinkSheet";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 export function Checkbox({ id, checked, onChange, children }: { id: string; checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
   return (
@@ -41,8 +42,8 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
     setError(null);
     try {
       setInv(await sendInvitation(inv.id, inv.revision));
-    } catch {
-      setError("We could not confirm sending. Check Invitations before trying again.");
+    } catch (e) {
+      setError(explainCaught(e, "We could not confirm sending. Check Invitations before trying again.", "invite"));
     } finally {
       working.current = false;
       setBusy(false);
@@ -53,8 +54,8 @@ export function InviteLinkResult({ inv: first, onClose }: { inv: Invitation; onC
     working.current = true; setBusy(true); setError(null);
     try {
       setLink(await createAccessLink(inv.id, inv.revision));
-    } catch {
-      setError("We could not confirm creating the link. Open Invitations to check this invitation before trying again.");
+    } catch (e) {
+      setError(explainCaught(e, "We could not confirm creating the link. Open Invitations to check this invitation before trying again.", "invite"));
     } finally { working.current = false; setBusy(false); }
   }
   if (link) return <AccessLinkSheet name={inv.name} link={link} onClose={onClose} embedded />;

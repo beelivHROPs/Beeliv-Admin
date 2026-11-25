@@ -12,6 +12,7 @@ import { inboxActions } from "@/lib/admin/inbox/hooks";
 import type { ActivityKind, InboxAssignee, InboxCaseDetail, InboxPermissions, InboxStatus, WorkforceRequestInfo, WorkforceRequestStatus } from "@/lib/admin/inbox/types";
 import { REQUEST_STATUS_LABEL } from "@/lib/admin/inbox/live";
 import { CATEGORY_LABEL, ESCALATION_TARGET, RELATED_LABEL, SENDER_KIND_LABEL, STATUS_CHIP, STATUS_LABEL, STATUS_ORDER } from "./meta";
+import { errorMessage } from "@/lib/shared/error-messages";
 
 const ACTIVITY_ICON: Record<ActivityKind, typeof Clock3> = {
   created: Mail,
@@ -22,8 +23,8 @@ const ACTIVITY_ICON: Record<ActivityKind, typeof Clock3> = {
   escalated: CircleAlert,
 };
 
-function failToast(title: string) {
-  toast.add({ title, description: "Please try again.", type: "error" });
+function failToast(title: string, e?: unknown) {
+  toast.add({ title, description: errorMessage(e, "Please try again."), type: "error" });
 }
 
 /** Escalate, after confirming where it goes (spec 31.2 oversight column). */
@@ -38,8 +39,8 @@ export async function escalateCase(detail: InboxCaseDetail) {
   try {
     await inboxActions.escalate(detail.id);
     toast.add({ title: "Case escalated", type: "success" });
-  } catch {
-    failToast("Could not escalate");
+  } catch (e) {
+    failToast("Could not escalate", e);
   }
 }
 
@@ -47,8 +48,8 @@ export async function changeStatus(id: string, status: InboxStatus) {
   try {
     await inboxActions.setStatus(id, status);
     toast.add({ title: `Status: ${STATUS_LABEL[status]}`, type: "success" });
-  } catch {
-    failToast("Could not change the status");
+  } catch (e) {
+    failToast("Could not change the status", e);
   }
 }
 
@@ -56,8 +57,8 @@ export async function assignCase(id: string, assigneeId: string | null) {
   try {
     await inboxActions.assign(id, assigneeId);
     toast.add({ title: assigneeId ? "Case assigned" : "Case unassigned", type: "success" });
-  } catch {
-    failToast("Could not assign the case");
+  } catch (e) {
+    failToast("Could not assign the case", e);
   }
 }
 
@@ -95,7 +96,7 @@ function RequestStatusForm({ caseId, info }: { caseId: string; info: WorkforceRe
       setMessage("");
       toast.add({ title: status !== info.status ? `Status: ${REQUEST_STATUS_LABEL[status]}` : "Message sent to the client", type: "success" });
     } catch (e) {
-      toast.add({ title: "Could not update the request", description: e instanceof Error && e.message ? e.message : "Please try again.", type: "error" });
+      toast.add({ title: "Could not update the request", description: errorMessage(e, "Please try again."), type: "error" });
       setStatus(info.status);
     } finally {
       setBusy(false);

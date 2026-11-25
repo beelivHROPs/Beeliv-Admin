@@ -31,6 +31,7 @@ import { InvitationDetailsSheet } from "./InvitationDetailsSheet";
 import { getInvitationDetails, createAccessLink, replaceInvitation, resendInvitation, revokeInvitation, sendInvitation, updateInvitationEmail, useInvitations } from "@/lib/admin/team-access/hooks";
 import type { AccessLink, Invitation, InvitationKind, InvitationStatus, TeamCapabilities } from "@/lib/admin/team-access/types";
 import { INVITE_LABEL, INVITE_ORDER, KIND_LABEL, TEAM_HREF } from "./meta";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const MANAGE_TAB: Record<InvitationKind, string> = { internal: "internal", client: "clients", staff: "accounts" };
 
@@ -105,7 +106,8 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
   }
 
   const canFor = (k: InvitationKind) => (k === "internal" ? caps.canInviteInternal : k === "client" ? caps.canInviteClient : caps.canInviteStaff);
-  const fail = () => onNotice({ kind: "error", text: "We could not confirm the change. Reload Invitations before trying again." });
+  /** The reason when the server gave one (session ended, no access, too many attempts...); otherwise "check before retrying". */
+  const fail = (e?: unknown) => onNotice({ kind: "error", text: explainCaught(e, "We could not confirm the change. Reload Invitations before trying again.", "invite") });
 
   async function send(i: Invitation) {
     if (busy) return;
@@ -122,8 +124,8 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       await sendInvitation(i.id, i.revision);
       playAdminSound("saved");
       onNotice({ kind: "ok", text: liveMode ? `The invitation to ${i.name} was queued for delivery.` : `The invitation to ${i.name} was sent (recorded only).` });
-    } catch {
-      fail();
+    } catch (e) {
+      fail(e);
     } finally { setBusy(false); }
   }
   async function resend(i: Invitation) {
@@ -144,7 +146,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       onNotice({ kind: "ok", text: liveMode ? `The invitation to ${i.name} was queued for delivery.` : `The invitation to ${i.name} was ${retry ? "sent again" : "resent"} (recorded only).` });
     } catch (e) {
       if (e instanceof Error && e.message === "cooldown") onNotice({ kind: "error", text: "Please wait for the cooldown to finish before resending." });
-      else fail();
+      else fail(e);
     } finally { setBusy(false); }
   }
   async function makeLink(i: Invitation) {
@@ -175,7 +177,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
           // Never retried with the same request: the person must reload, then create a new link.
           setUnknownLinks((l) => [...l, i.id]);
           onNotice({ kind: "error", text: LINK_UNKNOWN });
-        } else fail();
+        } else fail(e);
       }
     } finally {
       setBusy(false);
@@ -195,8 +197,8 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       await replaceInvitation(i.id, i.revision);
       playAdminSound("saved");
       onNotice({ kind: "ok", text: `A replacement invitation for ${i.name} was created. It has not been sent yet.` });
-    } catch {
-      fail();
+    } catch (e) {
+      fail(e);
     } finally { setBusy(false); }
   }
   async function revoke(reason: string) {
@@ -208,8 +210,8 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       playAdminSound("rejected");
       onNotice({ kind: "ok", text: `The invitation to ${revoking.name} was revoked.` });
       setRevoking(null);
-    } catch {
-      setErr("We could not confirm the change. Reload Invitations before trying again.");
+    } catch (e) {
+      setErr(explainCaught(e, "We could not confirm the change. Reload Invitations before trying again.", "invite"));
     } finally {
       setBusy(false);
     }
@@ -223,7 +225,7 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
       onNotice({ kind: "ok", text: `The address for ${editing.name} was changed. The invitation has not been sent yet.` });
       setEditing(null);
     } catch (e) {
-      setErr(e instanceof Error && e.message === "duplicate" ? "Another pending invitation already uses that address." : "We could not confirm the change. Reload Invitations before trying again.");
+      setErr(explainCaught(e, "We could not confirm the change. Reload Invitations before trying again.", "invite"));
     } finally {
       setBusy(false);
     }
@@ -235,8 +237,8 @@ export function InvitationsList({ caps, onNotice }: { caps: TeamCapabilities; on
     try {
       const updated = await getInvitationDetails(i.id, i.revision);
       live.setData({ ...page, rows: page.rows.map((row) => row.id === i.id ? updated : row) });
-    } catch {
-      onNotice({ kind: "error", text: "We could not confirm the available actions. Reload Invitations and check again." });
+    } catch (e) {
+      onNotice({ kind: "error", text: explainCaught(e, "We could not confirm the available actions. Reload Invitations and check again.", "invite") });
     } finally { setBusy(false); }
   }
 

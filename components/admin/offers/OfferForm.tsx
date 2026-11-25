@@ -27,6 +27,7 @@ import { offerHref, OFFERS_HREF } from "./meta";
 import { FoldSection as Section, PhoneFormBody, PhoneFormHead } from "@/components/admin/PhoneForm";
 import { NeedsConfirmation, Restricted } from "./parts";
 import { FIELD_LABEL } from "./Sheet";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const blankPay = (): PayLine[] => [{ key: "p1", label: "Basic pay", value: "", visibility: "public" }];
 
@@ -183,8 +184,8 @@ function FormBody({ facets, existing, initialApplicantId }: { facets: OfferFacet
       const clean = { ...f, pay: f.pay.filter((p) => p.label.trim() && p.value.trim()) };
       const saved = existing ? await updateOfferDraft(existing.id, clean) : await createOffer(clean);
       router.push(`${offerHref(saved.id)}?saved=${existing ? "updated" : "draft"}`);
-    } catch {
-      setError("We could not save the offer. Nothing was changed. Please try again.");
+    } catch (e) {
+      setError(explainCaught(e, "We could not save the offer. Nothing was changed. Please try again."));
       setBusy(false);
     }
   }

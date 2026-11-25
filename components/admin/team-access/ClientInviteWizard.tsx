@@ -20,6 +20,7 @@ import { inviteUser } from "@/lib/admin/team-access/hooks";
 import { emailTypoSuggestion, emailsMatch } from "@/lib/admin/team-access/email-check";
 import type { Invitation, TeamFacets } from "@/lib/admin/team-access/types";
 import { Checkbox, InviteLinkResult } from "./InviteParts";
+import { explainCaught, explainError } from "@/lib/shared/error-messages";
 
 type OutletDraft = { name: string; address: string; city: string };
 const STEP_TITLE = ["Business details", "Outlets", "Who to invite", "Review"];
@@ -96,7 +97,7 @@ export function ClientWizard({ facets, onClose, onDone, live = false, onUseExist
       playAdminSound("saved");
       onDone?.(inv);
     } catch (e) {
-      const why = e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation." : orgErrorMessage(e, "We couldn't confirm this step.");
+      const why = e instanceof Error && e.message === "duplicate" ? explainError("duplicate", "invite") : orgErrorMessage(e, "We couldn't confirm this step.");
       setError(savedClient.current ? `${bName} is saved. ${why} Press "Try again" to finish the rest; nothing will be created twice.` : `${why} Nothing was saved. Please try again.`);
     } finally {
       setBusy(false);
@@ -122,7 +123,7 @@ export function ClientWizard({ facets, onClose, onDone, live = false, onUseExist
       playAdminSound("saved"); // invitation created (the confirmation screen is already showing)
       onDone?.(inv);
     } catch (e) {
-      setError(e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation. Resend or revoke the existing invitation instead." : "We could not create the client and invitation. Nothing was changed. Please try again.");
+      setError(explainCaught(e, "We could not create the client and invitation. Nothing was changed. Please try again.", "invite"));
     } finally {
       setBusy(false);
     }

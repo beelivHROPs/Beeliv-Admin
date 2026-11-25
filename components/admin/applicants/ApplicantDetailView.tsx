@@ -34,6 +34,7 @@ import { COVER_ROUND, PD_CTA, PhoneAction, PhoneDetailHead, PhoneFacts, PhoneMor
 import { ActionsMenu } from "./ActionsMenu";
 import { NextActionBox, ProgressRail } from "./Rail";
 import { useUrlParams } from "./url";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -108,8 +109,8 @@ export function ApplicantDetailView({ id }: { id: string }) {
       // Sound only after the adapter confirmed (the page already shows the new stage).
       playAdminSound(action === "shortlist" || action === "submit-for-approval" || action === "approve-selection" ? "approved" : action === "reject" ? "rejected" : "saved");
       return true;
-    } catch {
-      setError("That action could not be completed. Nothing was changed.");
+    } catch (e) {
+      setError(explainCaught(e, "That action could not be completed. Nothing was changed.", "application"));
       return false;
     } finally {
       setBusy(false);

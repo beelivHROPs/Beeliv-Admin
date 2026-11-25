@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RestrictedError } from "../adapter";
 import type { LoadStatus } from "../types";
 import * as service from "./service";
+import { noteLoadFailure } from "../../shared/load-failure";
 
 export function useListsLoad(): { status: LoadStatus; retry: () => void } {
   const [attempt, setAttempt] = useState(0);
@@ -17,7 +18,7 @@ export function useListsLoad(): { status: LoadStatus; retry: () => void } {
     let cancelled = false;
     service.loadLists().then(
       () => !cancelled && setResult({ attempt, failed: null }),
-      (e: unknown) => !cancelled && setResult({ attempt, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => !cancelled && noteLoadFailure(e) && setResult({ attempt, failed: e instanceof RestrictedError ? "restricted" : "error" }),
     );
     return () => {
       cancelled = true;

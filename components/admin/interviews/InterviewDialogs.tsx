@@ -17,6 +17,7 @@ import { Exclaim } from "@/components/applicant/icons";
 import { cancelInterview, checkInterviewConflicts, interviewsLive, rescheduleInterview, scheduleInterview } from "@/lib/admin/interviews/hooks";
 import { METHOD_LABEL, type Conflict, type InterviewDetail, type InterviewMethod, type InterviewRow, type PersonRef } from "@/lib/admin/interviews/types";
 import { NoteSheet, SHEET_BTN, Sheet } from "./ui";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 export type Intent = { kind: "schedule" | "reschedule" | "cancel"; row: InterviewRow | null };
 
@@ -71,8 +72,8 @@ function CancelFlow({ row, onClose, onSaved, onFailed }: { row: InterviewRow; on
         try {
           const d = await cancelInterview(row.id, { reason });
           onSaved(d, `The ${row.stageName} for ${row.candidateName} was cancelled.`, "rejected");
-        } catch {
-          onFailed("We could not cancel the interview. Nothing was changed. Please try again.");
+        } catch (e) {
+          onFailed(explainCaught(e, "We could not cancel the interview. Nothing was changed. Please try again.", "interview"));
         } finally {
           setBusy(false);
         }

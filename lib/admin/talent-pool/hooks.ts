@@ -6,6 +6,7 @@ import { RestrictedError } from "../adapter";
 import type { LoadStatus } from "../types";
 import * as service from "./service";
 import type { TalentPoolPage, TalentPoolQuery } from "./types";
+import { noteLoadFailure } from "../../shared/load-failure";
 
 type Result = { key: string; data: TalentPoolPage | null; failed: "error" | "restricted" | null };
 
@@ -30,7 +31,7 @@ export function useTalentPool(q: TalentPoolQuery): LivePool {
     let cancelled = false;
     service.listPool(latest.current).then(
       (data) => !cancelled && setResult({ key, data, failed: null }),
-      (e: unknown) => !cancelled && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => !cancelled && noteLoadFailure(e) && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
     );
     return () => {
       cancelled = true;

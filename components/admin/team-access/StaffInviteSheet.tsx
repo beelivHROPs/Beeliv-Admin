@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/applicant/time";
 import { PhoneInput } from "@/components/applicant/form-fields";
 import { canonicalAccountPhone, validateOptionalAccountPhone } from "@/lib/public-site/auth-rules";
 import { Checkbox, InviteLinkResult } from "./InviteParts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const STEPS = ["Details", "Review"];
 /** Generic on purpose: never names or describes the other account. No "different person" bypass for a phone. */
@@ -66,8 +67,8 @@ export function StaffWizard({ facets, prefill, onClose, onDone }: { facets: Team
       setDupes(found);
       // Email and phone matches always block. Only a same-name match can be confirmed as a different person.
       if (!found.some((d) => d.match === "exact" || d.match === "phone") && (!found.some((d) => d.match === "similar") || differentPerson)) setStep(1);
-    } catch {
-      setError("We could not check for duplicates. Nothing was changed. Please try again.");
+    } catch (e) {
+      setError(explainCaught(e, "We could not check for duplicates. Nothing was changed. Please try again."));
     } finally {
       setChecking(false);
     }
@@ -82,7 +83,7 @@ export function StaffWizard({ facets, prefill, onClose, onDone }: { facets: Team
       playAdminSound("saved"); // invitation created (the confirmation screen is already showing)
       onDone?.(inv);
     } catch (e) {
-      setError(e instanceof Error && e.message === "duplicate" ? "That email already has an account or a pending invitation." : e instanceof Error && e.message === "phone-duplicate" ? PHONE_TAKEN : "We could not create the staff record. Nothing was changed. Please try again.");
+      setError(e instanceof Error && e.message === "phone-duplicate" ? PHONE_TAKEN : explainCaught(e, "We could not create the staff record. Nothing was changed. Please try again.", "invite"));
     } finally {
       setBusy(false);
     }

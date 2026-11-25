@@ -36,6 +36,7 @@ import { ConvertSheet, ResendSheet } from "./OfferSheets";
 import { ActivityList, Facts, LifecycleStepper, NeedsConfirmation, OfferStatusChip, OfferStatusPill, Restricted, Section } from "./parts";
 import { COVER_ROUND, PD_CTA, PhoneAction, PhoneDetailHead, PhoneFacts, PhoneMore, PhoneStickyAction, initialsOf } from "@/components/admin/PhoneDetail";
 import { ReasonSheet } from "./Sheet";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const SAVED_TEXT: Record<string, string> = { draft: "The offer was saved as a draft.", updated: "Your changes were saved." };
 const PRIMARY: OfferAction[] = ["submit", "approve", "send", "convert"];
@@ -95,8 +96,8 @@ export function OfferDetailView({ id }: { id: string }) {
       setNotice({ kind: "ok", text: done });
       if (sound) playAdminSound(sound); // only after the adapter confirmed
       if (closeSheet) setAsking(null);
-    } catch {
-      const text = "That did not go through. Nothing was changed. Please try again.";
+    } catch (e) {
+      const text = explainCaught(e, "That did not go through. Nothing was changed. Please try again.");
       if (closeSheet) setSheetError(text);
       else setNotice({ kind: "error", text });
     } finally {

@@ -15,6 +15,7 @@ import { useFlagInvalid } from "@/components/applicant/form-feedback";
 import { useIsClient } from "@/components/applicant/motion";
 import { toast } from "@/components/ui/toast";
 import { changePassword } from "@/lib/admin/settings/hooks";
+import { errorMessage } from "@/lib/shared/error-messages";
 
 const MIN = 8;
 
@@ -57,8 +58,8 @@ export function PasswordSheet({ onClose }: { onClose: () => void }) {
       await changePassword({ current: cur, next });
       toast.add({ title: "Changing your password isn't connected yet", description: "Available once Admin sign-in is connected. No account changes were made." });
       onClose();
-    } catch {
-      toast.add({ title: "We couldn't change that", description: "Please try again.", type: "error" });
+    } catch (e) {
+      toast.add({ title: "We couldn't change that", description: errorMessage(e), type: "error" });
       setBusy(false);
     }
   }

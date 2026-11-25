@@ -24,6 +24,7 @@ import { assignStaff, useAssignments } from "@/lib/admin/staff/hooks";
 import type { AssignInput, AssignmentRow, AssignmentsPage } from "@/lib/admin/staff/types";
 import { AssignSheet } from "./AssignSheet";
 import { ANY, AdminState, staffHref, useUrlParams, withAny } from "./parts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const SORTS = [
   { value: "newest", label: "Newest first" },
@@ -85,8 +86,8 @@ export function AssignmentsView() {
       setDone("Assignment saved. The history has been updated.");
       live.retry();
       close();
-    } catch {
-      setError("That could not be saved. Nothing was changed.");
+    } catch (e) {
+      setError(explainCaught(e, "That could not be saved. Nothing was changed.", "records"));
     } finally {
       setBusy(false);
     }

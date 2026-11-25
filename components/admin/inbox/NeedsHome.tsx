@@ -20,6 +20,7 @@ import { useDialogFocus } from "@/lib/a11y/useDialogFocus";
 import { inboxActions, type InboxLoadable } from "@/lib/admin/inbox/hooks";
 import type { CasePickerItem, NeedsHomeItem } from "@/lib/admin/inbox/types";
 import { NEEDS_HOME_REASON, listStamp } from "./meta";
+import { errorMessage } from "@/lib/shared/error-messages";
 
 /** Case picker. Phones: bottom sheet. Wider: centred card. z-[150] so it sits above every other layer. */
 function CasePickerSheet({ item, onClose }: { item: NeedsHomeItem; onClose: () => void }) {
@@ -57,8 +58,8 @@ function CasePickerSheet({ item, onClose }: { item: NeedsHomeItem; onClose: () =
       await inboxActions.assignNeedsHome(item.id, pick.id);
       toast.add({ title: "Added to the case", description: `${pick.reference} now shows this email.`, type: "success" });
       onClose();
-    } catch {
-      toast.add({ title: "Could not add the email", description: "Nothing changed. Please try again.", type: "error" });
+    } catch (e) {
+      toast.add({ title: "Could not add the email", description: errorMessage(e, "Nothing changed. Please try again."), type: "error" });
       setBusy(false);
     }
   }
@@ -146,8 +147,8 @@ function NeedsHomeCard({ item }: { item: NeedsHomeItem }) {
     try {
       await inboxActions.dismissNeedsHome(item.id);
       toast.add({ title: "Dismissed as spam", type: "success" });
-    } catch {
-      toast.add({ title: "Could not dismiss it", description: "Nothing changed. Please try again.", type: "error" });
+    } catch (e) {
+      toast.add({ title: "Could not dismiss it", description: errorMessage(e, "Nothing changed. Please try again."), type: "error" });
       setBusy(false);
     }
   }

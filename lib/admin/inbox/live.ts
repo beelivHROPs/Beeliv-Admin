@@ -7,6 +7,7 @@
  * Only relative imports so the mapping is unit-tested offline (tests/day2-staff-requests.test.cjs).
  */
 import { RestrictedError } from "../adapter";
+import { errorFromReply, networkError } from "../../shared/error-messages";
 import { NotFoundError, type InboxAdapter } from "./adapter";
 import type {
   InboxActivity, InboxCaseDetail, InboxCaseSummary, InboxList, InboxMessage, InboxPermissions, InboxStatus, WorkforceRequestHistoryEntry,
@@ -108,12 +109,13 @@ const REASON: Record<string, string> = {
 };
 
 async function call(action: string, body: Rec): Promise<Rec> {
-  const res = await fetch(`/api/admin/requests/${action}`, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(`/api/admin/requests/${action}`, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => { throw networkError(); });
   const j = rec(await res.json().catch(() => null));
   if (j?.ok === true) return j;
   const reason = str(j?.reason);
   if (reason === "no_access" || reason === "unauthenticated" || reason === "forbidden" || reason === "mfa_required") throw new RestrictedError();
-  throw new Error(REASON[reason] ?? "This could not be completed. Please try again.");
+  // Inbox-specific wording first, then the shared explanation (lib/shared/error-messages.ts).
+  throw errorFromReply(j, undefined, { ...REASON, unavailable: "This could not be completed. Please try again." });
 }
 
 const listeners = new Set<() => void>();
