@@ -6,6 +6,7 @@ import { RestrictedError } from "../adapter";
 import type { Loadable } from "../types";
 import * as service from "./service";
 import type { AdminAccountSettings, AdminPrefs } from "./types";
+import { noteLoadFailure } from "../../shared/load-failure";
 
 type Result = { key: string; data: AdminAccountSettings | null; failed: "error" | "restricted" | null };
 
@@ -20,7 +21,7 @@ export function useAdminAccount(): Loadable<AdminAccountSettings> & { setData: (
     let cancelled = false;
     service.getAccount().then(
       (data) => !cancelled && setResult({ key, data, failed: null }),
-      (e: unknown) => !cancelled && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => !cancelled && noteLoadFailure(e) && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
     );
     return () => {
       cancelled = true;

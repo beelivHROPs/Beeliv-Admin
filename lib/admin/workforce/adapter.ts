@@ -58,4 +58,6 @@ export interface WorkforceAdapter {
   getWarning(id: string): Promise<WarningDetail | null>;
   issueWarning(input: WarningInput): Promise<WarningDetail>;
   withdrawWarning(id: string, input: { reason: string }): Promise<WarningDetail>;
+  /** One person's warnings for the Admin staff profile. null = not served here (the staff record's own list is shown). */
+  getStaffWarnings(staffId: string): Promise<WarningDetail[] | null>;
 }

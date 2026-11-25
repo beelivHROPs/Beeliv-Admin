@@ -29,6 +29,7 @@ import { AccessSheet, HistorySheet } from "./AccessSheets";
 import { PersonDetailsSheet } from "./PersonDetailsSheet";
 import { ACCOUNT_LABEL, ACCOUNT_ORDER, ACCOUNT_TONE, INVITATIONS_HREF } from "./meta";
 import { Restricted } from "@/components/admin/offers/parts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 const COLS = "grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,1fr)_40px]";
 
@@ -114,8 +115,8 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
       await setAccountState(row.id, action, reason);
       setReasonFor(null);
       onNotice({ kind: "ok", text: `${row.name} ${c.done}` });
-    } catch {
-      setSheetError("That did not go through. Nothing was changed. Please try again.");
+    } catch (e) {
+      setSheetError(explainCaught(e, "That did not go through. Nothing was changed. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -128,8 +129,8 @@ export function PeopleList({ list, caps, onNotice }: { list: AccessList; caps: T
       await updateAccess(accessFor.id, patch);
       onNotice({ kind: "ok", text: `Access for ${accessFor.name} was updated.` });
       setAccessFor(null);
-    } catch {
-      setSheetError("That did not go through. Nothing was changed. Please try again.");
+    } catch (e) {
+      setSheetError(explainCaught(e, "That did not go through. Nothing was changed. Please try again."));
     } finally {
       setBusy(false);
     }

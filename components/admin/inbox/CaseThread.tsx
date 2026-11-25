@@ -11,6 +11,7 @@ import { assignCase, escalateCase } from "./CaseDetails";
 import { CantAttendPanel } from "./CantAttendPanel";
 import { Paperclip, Send, Tick } from "./Glyphs";
 import { CATEGORY_LABEL, clockTime, DELIVERY_DOT, DELIVERY_EXPLAIN, DELIVERY_LABEL, dayKey, dayLabel, initials, NO_EMAIL_NOTE, STATUS_CHIP, STATUS_LABEL } from "./meta";
+import { errorMessage } from "@/lib/shared/error-messages";
 
 type Entry = { type: "message"; at: string; m: InboxMessage } | { type: "note"; at: string; n: InboxNote };
 
@@ -44,8 +45,8 @@ function DeliveryLine({ caseId, messageId, d }: { caseId: string; messageId: str
     try {
       await inboxActions.retryDelivery(caseId, messageId);
       toast.add({ title: "Queued to send again", type: "success" });
-    } catch {
-      toast.add({ title: "Could not retry", description: "This email can no longer be retried from here.", type: "error" });
+    } catch (e) {
+      toast.add({ title: "Could not retry", description: errorMessage(e, "This email can no longer be retried from here."), type: "error" });
     } finally {
       setBusy(false);
     }
@@ -55,8 +56,8 @@ function DeliveryLine({ caseId, messageId, d }: { caseId: string; messageId: str
     try {
       const r = await inboxActions.checkDelivery(caseId, messageId);
       toast.add({ title: r === "unknown" ? "Still not confirmed" : "Status updated", description: r === "unknown" ? "Try again in a few minutes. Nothing was resent." : undefined, type: r === "unknown" ? "info" : "success" });
-    } catch {
-      toast.add({ title: "Could not check the status", description: "Please try again.", type: "error" });
+    } catch (e) {
+      toast.add({ title: "Could not check the status", description: errorMessage(e), type: "error" });
     } finally {
       setBusy(false);
     }
@@ -164,8 +165,8 @@ function Composer({ detail, permissions }: { detail: InboxCaseDetail; permission
       else await inboxActions.reply(detail.id, body);
       setDrafts((d) => ({ ...d, [mode]: "" }));
       toast.add({ title: isNote ? "Internal note saved" : "Reply queued", description: isNote ? undefined : "It will be emailed shortly.", type: "success" });
-    } catch {
-      toast.add({ title: isNote ? "Could not save the note" : "Could not send the reply", description: "Your text is still here. Please try again.", type: "error" });
+    } catch (e) {
+      toast.add({ title: isNote ? "Could not save the note" : "Could not send the reply", description: `${errorMessage(e, "Please try again.")} Your text is still here.`, type: "error" });
     } finally {
       setBusy(false);
     }
@@ -401,7 +402,8 @@ export function CaseThread({
         </div>
       </div>
 
-      <Composer key={detail.id} detail={detail} permissions={permissions} />
+      {/* Client staff requests are answered through the status change in Case details (no email reply or note backend). */}
+      {detail.workforceRequest ? null : <Composer key={detail.id} detail={detail} permissions={permissions} />}
     </div>
   );
 }

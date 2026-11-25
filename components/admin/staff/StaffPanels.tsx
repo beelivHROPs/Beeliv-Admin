@@ -382,21 +382,26 @@ export function AgreementsPanel({ s }: { s: StaffDetail }) {
 
 /* ---------- Warnings ---------- */
 
-export function WarningsPanel({ s }: { s: StaffDetail }) {
+/** `live`: real warnings are shown (issued from Workforce, Warnings), so the prototype's switched-off button and note are left out. */
+export function WarningsPanel({ s, live = false }: { s: StaffDetail; live?: boolean }) {
   const { rows, more } = useFive(s.warnings);
   return (
     <DCard
       title="Warnings"
       hideTitleOnPhone
       right={
-        <button type="button" disabled aria-describedby="warn-note" className="ap-btn ap-btn-s ap-btn-sm">
-          <Plus className="size-4" aria-hidden="true" /> Issue warning
-        </button>
+        live ? undefined : (
+          <button type="button" disabled aria-describedby="warn-note" className="ap-btn ap-btn-s ap-btn-sm">
+            <Plus className="size-4" aria-hidden="true" /> Issue warning
+          </button>
+        )
       }
     >
-      <div id="warn-note" className="mb-3">
-        <NeedsConfirmation>Who may issue a warning needs Beeliv confirmation (the spec does not state it), so issuing is switched off in this prototype.</NeedsConfirmation>
-      </div>
+      {live ? null : (
+        <div id="warn-note" className="mb-3">
+          <NeedsConfirmation>Who may issue a warning needs Beeliv confirmation (the spec does not state it), so issuing is switched off in this prototype.</NeedsConfirmation>
+        </div>
+      )}
       {s.warnings.length === 0 ? (
         <EmptyState icon={ShieldAlert} title="No warnings" description="Warnings appear here when one is issued for this person." />
       ) : (

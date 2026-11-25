@@ -522,7 +522,7 @@ function adminBrowse(role: AdminAccessRole, pilot?: boolean) {
 }
 
 /** Search sources with REAL data on a live deployment (pages list, real applicants, rosters, attendance, leave, team). */
-const LIVE_SOURCES = new Set(["/admin", "/admin/recruitment/applicants", "/admin/workforce/leave", "/admin/workforce/attendance", "/admin/workforce/scheduling", "/admin/team-access"]);
+const LIVE_SOURCES = new Set(["/admin", "/admin/recruitment/applicants", "/admin/workforce/leave", "/admin/workforce/attendance", "/admin/workforce/scheduling", "/admin/workforce/warnings", "/admin/team-access"]);
 
 export function buildAdminSearchProvider(role: AdminAccessRole, ctx: AdminActionContext): SearchProvider {
   return {

@@ -15,6 +15,7 @@
  * NoticeBanner (interviews), Disc, EmptyState, ErrorPanel, AdminAvatar.
  */
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { QUIET_ICON_BTN } from "@/components/admin/standard/MoreMenu";
 import { NoticeBanner, type Notice } from "@/components/admin/interviews/ui";
@@ -29,6 +30,7 @@ import { AdminAvatar } from "@/components/admin/AdminAvatar";
 import { HistoryList, range, staffHref, stamp } from "./parts";
 import { EmptyCard, FailurePanel, ListSkeleton } from "./states";
 import { ShiftSheet } from "./ShiftSheet";
+import { isPastShiftDate } from "@/lib/admin/workforce/lagos";
 import { PhoneScheduling } from "./PhoneScheduling";
 
 /** Quiet marker: a small dot plus the word (the chip was heavy once a day holds several shifts). */
@@ -39,8 +41,16 @@ const STATE_MARK: Record<ShiftState, { dot: string; label: string } | null> = {
   removing: { dot: "bg-(--ap-rose)", label: "Removing" },
 };
 
+/** `?outlet=<id>&week=<YYYY-MM-DD>` preselects an outlet and week (link from a staff profile). Anything else is ignored. */
+function initialQuery(params: URLSearchParams | null) {
+  const outlet = params?.get("outlet") ?? "";
+  const week = params?.get("week") ?? "";
+  return { outletId: /^[0-9a-z-]{1,64}$/i.test(outlet) ? outlet : "", weekStart: startOfWeek(/^\d{4}-\d{2}-\d{2}$/.test(week) ? week : todayISO()) };
+}
+
 export function SchedulingView() {
-  const [query, setQuery] = useState({ outletId: "", weekStart: startOfWeek(todayISO()) });
+  const params = useSearchParams();
+  const [query, setQuery] = useState(() => initialQuery(params));
   const live = useSchedule(query);
   const [shown, setShown] = useState<SchedulePage | null>(null);
   if (live.data && live.data !== shown) setShown(live.data);
@@ -361,8 +371,12 @@ function MoreMenu({ items, disabled, children }: { items: { label: string; icon:
 }
 
 
+const PAST_TIP = "Past shifts can't be changed";
+
 function ShiftItem({ s, editable, busy, onEdit, onRemove }: { s: ShiftRow; editable: boolean; busy: boolean; onEdit: () => void; onRemove: () => void }) {
   const mark = STATE_MARK[s.state];
+  // Shifts dated before yesterday (Africa/Lagos) are read-only; the server refuses changes to them.
+  const past = isPastShiftDate(s.date);
   const ghost = "inline-flex size-8 items-center justify-center rounded-full text-(--ap-muted) transition-colors hover:bg-(--ap-line-2) hover:text-(--ap-ink) focus-visible:ring-2 focus-visible:ring-(--ap-violet) focus-visible:outline-none disabled:opacity-50";
   return (
     <li className={`rounded-xl border border-(--ap-line-2) bg-(--ap-tint-soft) p-3 transition-colors hover:border-(--ap-line) ${s.state === "removing" ? "opacity-70" : ""}`}>
@@ -373,10 +387,10 @@ function ShiftItem({ s, editable, busy, onEdit, onRemove }: { s: ShiftRow; edita
         </div>
         {editable && s.state !== "removing" ? (
           <div className="-mt-1 -mr-1 flex shrink-0">
-            <button type="button" disabled={busy} onClick={onEdit} aria-label={`Edit ${s.staff.name}'s shift`} title="Edit" className={ghost}>
+            <button type="button" disabled={busy || past} onClick={onEdit} aria-label={past ? `${s.staff.name}'s shift is in the past and can't be changed` : `Edit ${s.staff.name}'s shift`} title={past ? PAST_TIP : "Edit"} className={ghost}>
               <Pencil className="size-3.5" aria-hidden="true" />
             </button>
-            <button type="button" disabled={busy} onClick={onRemove} aria-label={`Remove ${s.staff.name}'s shift`} title="Remove" className={ghost}>
+            <button type="button" disabled={busy || past} onClick={onRemove} aria-label={past ? `${s.staff.name}'s shift is in the past and can't be removed` : `Remove ${s.staff.name}'s shift`} title={past ? PAST_TIP : "Remove"} className={ghost}>
               <Trash2 className="size-3.5" aria-hidden="true" />
             </button>
           </div>

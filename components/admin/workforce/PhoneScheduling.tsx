@@ -20,6 +20,7 @@ import { FunnelButton, SearchBar } from "@/components/shared/search/SearchCard";
 import { addDays, dayMonth, parseDate, todayISO, weekday } from "@/lib/client/format";
 import { avatarSlot } from "@/components/admin/AdminAvatar";
 import type { ScopeFacets, ShiftRow, ShiftState, WeekRoster } from "@/lib/admin/workforce/types";
+import { isPastShiftDate } from "@/lib/admin/workforce/lagos";
 import { DANGER_BTN, HistoryList, Sheet, SHEET_BTN, range, staffHref, stamp } from "./parts";
 
 type Tab = "all" | "conflicts" | "unpublished";
@@ -237,10 +238,10 @@ export function PhoneScheduling({
           footer={
             <>
               <button type="button" onClick={() => setDetail(null)} className={`ap-btn ap-btn-s ${SHEET_BTN}`}>Close</button>
-              {canAdd && open.state !== "removing" ? (
+              {canAdd && open.state !== "removing" && !isPastShiftDate(open.date) ? (
                 <button type="button" disabled={busy} onClick={() => { setDetail(null); onRemove(open); }} className={`ap-btn ${DANGER_BTN} ${SHEET_BTN}`}>Cancel shift</button>
               ) : null}
-              {canAdd && open.state !== "removing" ? (
+              {canAdd && open.state !== "removing" && !isPastShiftDate(open.date) ? (
                 <button type="button" disabled={busy} onClick={() => { setDetail(null); onEdit(open); }} className={`ap-btn ap-btn-p text-white! ${SHEET_BTN}`}>Edit or swap</button>
               ) : null}
             </>
@@ -259,7 +260,7 @@ export function PhoneScheduling({
             <dt className="text-(--ap-muted)">Break</dt>
             <dd className="m-0 text-(--ap-ink)">{open.breakMins} min</dd>
             <dt className="text-(--ap-muted)">Status</dt>
-            <dd className="m-0 text-(--ap-ink)">{STATE_LABEL[open.state] ?? "Published"}</dd>
+            <dd className="m-0 text-(--ap-ink)">{STATE_LABEL[open.state] ?? "Published"}{canAdd && isPastShiftDate(open.date) ? ". Past shifts can't be changed" : ""}</dd>
             <dt className="text-(--ap-muted)">Last edit</dt>
             <dd className="m-0 text-(--ap-ink)">{open.lastEditedBy}, {stamp(open.lastEditedAt)}</dd>
           </dl>

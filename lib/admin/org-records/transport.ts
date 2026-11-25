@@ -4,6 +4,7 @@
  * reported so the person can reload and check, or press the same button again (same requestId).
  */
 import { RestrictedError } from "../adapter";
+import { explainError, isKnownErrorCode, NETWORK_MESSAGE } from "../../shared/error-messages";
 import { ConflictError } from "../ops/adapter";
 
 export type OrgAction =
@@ -71,7 +72,7 @@ export async function orgCall<T>(action: OrgAction, body: Record<string, unknown
     try { wire = (await response.json()) as Wire; } catch { wire = null; }
   } catch {
     // Timeout or network failure: a write may have been committed.
-    throw write ? new OutcomeUnknownError(requestId) : new OrgUnavailableError("We could not load this. Please try again.");
+    throw write ? new OutcomeUnknownError(requestId) : new OrgUnavailableError(NETWORK_MESSAGE);
   } finally {
     clearTimeout(timer);
   }
@@ -96,7 +97,8 @@ export async function orgCall<T>(action: OrgAction, body: Record<string, unknown
     case "rate_limited": throw new OrgUnavailableError("Too many requests. Please wait a few minutes and try again.");
     case "unauthenticated": throw new OrgUnavailableError("Your session has ended. Sign in again to continue.");
     case "conflict": throw new OrgUnavailableError("That request clashed with an earlier one. Reload the page and try again.");
-    default: throw new OrgUnavailableError();
+    // Any other code (no_access, mfa_required, not_placed, ...) gets the shared explanation; "unavailable" keeps the records wording.
+    default: throw code !== "unavailable" && isKnownErrorCode(code) ? new OrgUnavailableError(explainError(code, "records")) : new OrgUnavailableError();
   }
 }
 

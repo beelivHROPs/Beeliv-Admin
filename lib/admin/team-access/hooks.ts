@@ -6,6 +6,7 @@ import { RestrictedError } from "../adapter";
 import type { LoadStatus } from "../types";
 import * as service from "./service";
 import type { AccessMatrix, AccessPage, AccessQuery, InvitationQuery, InvitationsPage, TeamCapabilities, TeamFacets } from "./types";
+import { noteLoadFailure } from "../../shared/load-failure";
 
 type Result<T> = { key: string; data: T | null; failed: "error" | "restricted" | null };
 export interface Live<T> {
@@ -31,7 +32,7 @@ function useLoad<T>(load: () => Promise<T | null>, deps: string, isEmpty: (d: T 
     let cancelled = false;
     latest.current().then(
       (data) => !cancelled && setResult({ key, data, failed: null }),
-      (e: unknown) => !cancelled && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => !cancelled && noteLoadFailure(e) && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
     );
     return () => {
       cancelled = true;

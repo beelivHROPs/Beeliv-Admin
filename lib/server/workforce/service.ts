@@ -2,6 +2,8 @@ import "server-only";
 import { adminClient, sessionClient } from "../auth/session";
 import { AuthFailure } from "../auth/service";
 import { limitAuth } from "../auth/rate";
+import { projectMyAssignment, validMyAssignmentInput } from "./assignment";
+import { parseWarningAck, parseWarningIssue, parseWarningWithdraw, validNoInput } from "./warnings";
 
 /**
  * Scheduling + attendance (docs/contracts/workforce-shifts-attendance.sql). The database functions re-check every
@@ -21,7 +23,9 @@ async function actor(app: "admin" | "talent") {
   const user = identity.user; const claims = proof?.claims;
   if (identityError || proofError || !user?.email_confirmed_at || claims?.sub !== user.id || typeof claims.session_id !== "string" || !UUID.test(claims.session_id)) throw new AuthFailure("unauthenticated", 401);
   if (app === "admin" && claims.aal !== "aal2") throw new AuthFailure("mfa_required", 403);
-  await limitAuth(app, app === "admin" ? "invite_manage_read" : "setup_read", user.id);
+  // Own bucket (lead 2026-11-24 bug: sharing the setup/invite buckets meant normal browsing used them up and the schedule
+  // "couldn't load"). Per-action limits are enforced again in the workforce_* database functions.
+  await limitAuth(app, app === "admin" ? "org_read" : "staff_enroll_read", `workforce:${user.id}`);
   return { uid: user.id, sessionId: claims.session_id as string };
 }
 
@@ -63,6 +67,10 @@ export async function workforceAdmin(action: string, input: Rec) {
     case "leave": return call("admin", "workforce_leave_list", {});
     case "leave-decide": return call("admin", "workforce_leave_decide", { p_leave_id: uuidOf(input.leaveId), p_expected_revision: intOf(input.expectedRevision, 1, 1_000_000),
       p_decision: input.decision === "approve" || input.decision === "decline" ? input.decision : bad(), p_note: str(input.note).slice(0, 1000) });
+    // Staff warnings (day2-warnings-requests.sql, part A). Strict shapes; the database re-checks permission, scope and state.
+    case "warning-list": return validNoInput(input) ? call("admin", "staff_warning_admin_list", {}) : bad();
+    case "warning-issue": return call("admin", "staff_warning_admin_issue", parseWarningIssue(input) ?? bad());
+    case "warning-withdraw": return call("admin", "staff_warning_admin_withdraw", parseWarningWithdraw(input) ?? bad());
     default: throw new AuthFailure("invalid_request", 404);
   }
 }
@@ -75,6 +83,15 @@ export async function workforceStaff(action: string, input: Rec) {
     case "leave-mine": return call("talent", "workforce_leave_mine", {});
     case "leave-request": return call("talent", "workforce_leave_request", { p_type: str(input.type).slice(0, 40), p_start: dateOf(input.startDate), p_end: dateOf(input.endDate), p_reason: str(input.reason).slice(0, 1000) });
     case "leave-cancel": return call("talent", "workforce_leave_cancel", { p_leave_id: uuidOf(input.leaveId) });
+    // Own current placement + history (day1-assignment-client-shifts.sql). Read-only; takes no input (the session is the person).
+    case "my-assignment": {
+      if (!validMyAssignmentInput(input)) bad();
+      const d = await call("talent", "staff_my_assignment", {});
+      return d.ok === true ? projectMyAssignment(d) : d;
+    }
+    // Own warnings only (the session is the person); acknowledge with an optional comment.
+    case "warning-mine": return validNoInput(input) ? call("talent", "staff_warning_mine", {}) : bad();
+    case "warning-ack": return call("talent", "staff_warning_acknowledge", parseWarningAck(input) ?? bad());
     default: throw new AuthFailure("invalid_request", 404);
   }
 }

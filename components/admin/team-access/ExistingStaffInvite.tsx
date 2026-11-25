@@ -7,6 +7,7 @@ import { orgCall } from "@/lib/admin/org-records/transport";
 import { inviteUser } from "@/lib/admin/team-access/hooks";
 import type { Invitation, InvitePrefill } from "@/lib/admin/team-access/types";
 import { InviteLinkResult } from "./InviteParts";
+import { explainCaught } from "@/lib/shared/error-messages";
 
 type StaffRow = { id: string; name: string; reference: string };
 type StaffDetail = StaffRow & {
@@ -52,8 +53,8 @@ export function ExistingStaffInvite({ prefill, onClose, onDone }: { prefill?: In
       const inv = await inviteUser({ kind: "staff", personId: person.id, name: person.name, email: person.email,
         clientId: person.current.clientId, outletIds: [person.current.outletId], allClients: false, scopeClientIds: [], expiresInDays: 7 });
       setInvitation(inv); onDone?.(inv);
-    } catch {
-      setError("We could not confirm the invitation. Check Invitations before trying again.");
+    } catch (e) {
+      setError(explainCaught(e, "We could not confirm the invitation. Check Invitations before trying again.", "invite"));
     } finally { setBusy(false); }
   }
   return <SheetFrame title="Invite existing staff" description="Choose an existing Staff record. The invitation uses its saved email and current placement." onClose={onClose} busy={busy} width={560} footer={invitation ? null : <><CancelButton onClick={onClose} disabled={busy} /><PrimaryButton onClick={create} disabled={!ready}>{busy ? "Working..." : "Create invitation"}</PrimaryButton></>}>

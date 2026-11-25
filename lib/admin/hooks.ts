@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RestrictedError } from "./adapter";
 import * as service from "./service";
+import { noteLoadFailure } from "../shared/load-failure";
 import type { AdminNotification, AdminSession, HrOverview, Loadable, NavCounts } from "./types";
 
 type Result<T> = { key: string; data: T | null; failed: "error" | "restricted" | null };
@@ -25,7 +26,11 @@ function useLoad<T>(load: () => Promise<T>, isEmpty: (d: T) => boolean): Loadabl
     let cancelled = false;
     load().then(
       (data) => !cancelled && setResult({ key, data, failed: null }),
-      (e: unknown) => !cancelled && setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" }),
+      (e: unknown) => {
+        if (cancelled) return;
+        noteLoadFailure(e); // the "couldn't load" panel names a specific reason when there is one
+        setResult({ key, data: null, failed: e instanceof RestrictedError ? "restricted" : "error" });
+      },
     );
     return () => {
       cancelled = true;

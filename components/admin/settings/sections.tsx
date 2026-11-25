@@ -25,6 +25,7 @@ import { clearAdminBanner, setAdminBannerFromFile, useAdminBanner } from "@/lib/
 import { setAdminDark, useAdminDark } from "@/lib/admin/theme";
 import { SoundSettingsRows } from "./SoundSettings";
 import { PasswordSheet } from "./PasswordSheet";
+import { errorMessage } from "@/lib/shared/error-messages";
 
 /**
  * Admin Settings sections: the same structure and look as Client Settings
@@ -43,7 +44,7 @@ function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; 
 }
 
 const saved = () => toast.add({ title: "Saved" });
-const failed = () => toast.add({ title: "We couldn't save that", description: "Please try again.", type: "error" });
+const failed = (e?: unknown) => toast.add({ title: "We couldn't save that", description: errorMessage(e, "Please try again."), type: "error" });
 
 const Chips = ({ items, empty }: { items: string[]; empty: string }) =>
   items.length ? (
@@ -93,8 +94,8 @@ export function ProfileSection({ profile, onSaved, readOnly = false }: { profile
       onSaved(next);
       toast.add({ title: "Profile saved" });
       setTried(false);
-    } catch {
-      failed();
+    } catch (e) {
+      failed(e);
     } finally {
       setBusy(false);
     }
@@ -198,8 +199,8 @@ export function SecuritySection({ sessions, onChanged, onSignOut }: { sessions: 
       else await revokeOtherSessions();
       onChanged(id ? [id] : others.map((s) => s.id));
       toast.add({ title: "Device preview updated", description: "Your real sign-in sessions have not changed." });
-    } catch {
-      failed();
+    } catch (e) {
+      failed(e);
     } finally {
       setBusyId(null);
     }
@@ -280,9 +281,9 @@ export function NotificationsSection({ prefs, onSaved }: { prefs: AdminNotificat
   function set(key: AdminNotificationPrefKey) {
     const next = { ...prefs, [key]: !prefs[key] };
     onSaved(next);
-    saveNotifications(next).then(saved, () => {
+    saveNotifications(next).then(saved, (e: unknown) => {
       onSaved(prefs);
-      failed();
+      failed(e);
     });
   }
   const rows = (list: PrefRow[]) =>

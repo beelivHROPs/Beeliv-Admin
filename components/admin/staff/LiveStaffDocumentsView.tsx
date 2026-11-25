@@ -22,15 +22,23 @@ import { rowOpenClick, rowOpenKey } from "@/components/admin/RowClick";
 const OPEN_ROW = "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--ap-violet)";
 const openRow = (canOpen: boolean, open: () => void) => (canOpen ? { tabIndex: 0, onClick: rowOpenClick(open), onKeyDown: rowOpenKey(open) } : {});
 import type { Decision, HrQueueDto, HrQueueRowDto, OpenGrant, ReasonCode, SlotState } from "@/lib/server/staff-documentation/types";
+import { errorFromReply, explainCaught, loadFailureReason, networkError } from "@/lib/shared/error-messages";
 
 async function call<T>(action: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`/api/admin/staff-documentation/${action}`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(30000),
-  });
-  const reply = await response.json();
-  if (!response.ok || reply?.ok !== true || !reply.value) throw new Error("unavailable");
-  return reply.value as T;
+  let response: Response;
+  try {
+    response = await fetch(`/api/admin/staff-documentation/${action}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(30000),
+    });
+  } catch {
+    throw networkError();
+  }
+  const reply: unknown = await response.json().catch(() => null);
+  const ok = reply as { ok?: unknown; value?: unknown } | null;
+  // The reason in our own words (lib/shared/error-messages.ts); the code stays on the error for logic.
+  if (!response.ok || ok?.ok !== true || !ok.value) throw errorFromReply(reply, "documents");
+  return ok.value as T;
 }
 
 const STATE: Record<SlotState, { label: string; tone: "ok" | "warn" | "bad" | "info" | "mute" }> = {
@@ -78,8 +86,8 @@ export function LiveStaffDocumentsView() {
       const next = await call<HrQueueDto>("hr-queue", { page, pageSize: PAGE, state: tab === "all" ? "" : tab, search });
       if (!Array.isArray(next.items) || !Number.isSafeInteger(next.total)) throw new Error("invalid_reply");
       if (mounted.current && sequence.current === version) setData(next);
-    } catch {
-      if (mounted.current && sequence.current === version) setError("We couldn't load staff documents. Check your connection, then try again.");
+    } catch (e) {
+      if (mounted.current && sequence.current === version) setError(loadFailureReason(e) ?? "We couldn't load staff documents. Check your connection, then try again.");
     } finally { if (mounted.current && sequence.current === version) setLoading(false); }
   }, [page, tab, search]);
   useEffect(() => { const task = setTimeout(() => void load(), 0); return () => clearTimeout(task); }, [load]);
@@ -220,8 +228,8 @@ function ReviewDrawer({ row, onClose, onSaved }: { row: HrQueueRowDto; onClose: 
         reasonCode: needsReason ? reason : null, message: needsReason ? message.trim() : null,
       });
       await onSaved(decision === "verified" ? `${row.label} verified for ${row.name}.` : `Your decision on ${row.label} was sent to ${row.name}.`);
-    } catch {
-      if (alive.current) { setBusy(false); setProblem("We couldn't confirm the review. Close this panel to see the latest status before trying again."); }
+    } catch (e) {
+      if (alive.current) { setBusy(false); setProblem(explainCaught(e, "We couldn't confirm the review. Close this panel to see the latest status before trying again.", "documents")); }
     }
   }
   const isPdf = grant?.mediaType === "application/pdf" || /\.pdf$/.test(grant ? new URL(grant.url).pathname : "");

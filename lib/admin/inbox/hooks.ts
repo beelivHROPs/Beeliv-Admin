@@ -81,4 +81,5 @@ export const inboxActions = {
   setStatus: service.setStatus,
   escalate: service.escalate,
   markRead: service.markRead,
+  updateWorkforceRequest: service.updateWorkforceRequest,
 };

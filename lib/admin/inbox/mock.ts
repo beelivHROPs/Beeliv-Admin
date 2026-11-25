@@ -597,6 +597,10 @@ export const mockInboxAdapter: InboxAdapter = {
     needsHome = needsHome.filter((n) => n.id !== itemId);
     emit();
   },
+  // Sample cases carry no workforceRequest, so the drawer never offers this in the preview.
+  async updateWorkforceRequest() {
+    throw new Error("This isn't connected in the preview.");
+  },
   async markRead(id) {
     const role = await gate();
     const c = find(role, id);

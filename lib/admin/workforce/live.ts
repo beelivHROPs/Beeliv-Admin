@@ -1,14 +1,14 @@
 /**
  * LIVE workforce adapter: the approved Scheduling and Attendance screens on REAL rosters and check-ins
- * (/api/admin/workforce/*, docs/contracts/workforce-shifts-attendance.sql). Leave, warnings, attendance corrections and
- * unpublish are not connected yet: those calls reject plainly and their pages stay "Coming soon".
+ * (/api/admin/workforce/*, docs/contracts/workforce-shifts-attendance.sql), leave (workforce-leave.sql) and warnings
+ * (day2-warnings-requests.sql, part A). Attendance corrections and unpublish are not connected yet: those calls reject plainly.
  */
 import type { AdapterEvent } from "../adapter";
 import { RestrictedError } from "../adapter";
 import type { WorkforceAdapter } from "./adapter";
 import type {
   AttendanceDetail, AttendancePage, AttendanceRow, AttendanceStatus, AttendanceTab, LeavePage, LeaveRow, LeaveStatus, LeaveTab, ScopeFacets, ShiftConflict, ShiftRow, ShiftState,
-  StaffLeaveHistory, TimeOffResult, WeekRoster,
+  StaffLeaveHistory, TimeOffResult, WarningDetail, WarningRow, WarningsPage, WarningStatus, WarningTab, WeekRoster,
 } from "./types";
 import { addDays, startOfWeek, todayISO } from "@/lib/client/format";
 
@@ -23,10 +23,18 @@ const NOT_CONNECTED = "This isn't connected yet.";
 const REASON: Record<string, string> = {
   note_required: "Add a short reason first.",
   invalid_transition: "This request has already been decided. Reload to see it.",
-  stale: "Someone changed this roster. Reload and try again.",
-  not_placed: "This person is not placed at this outlet.",
+  stale: "This shift was changed by someone else. Reload the week and try again.",
+  not_placed: "This person isn't placed at this outlet right now, so they can't be scheduled here.",
   already_worked: "This shift has already been worked, so it can't be removed.",
   invalid_request: "Check the shift details and try again.",
+};
+
+/** Per-action wording where the same refusal code means something specific to that action. */
+const ACTION_REASON: Record<string, Record<string, string>> = {
+  "shift-save": { invalid_request: "Shifts can only be added or changed from yesterday onwards (up to 120 days ahead). Check the date and times." },
+  "leave-decide": { stale: "This request was changed by someone else. Reload and try again." },
+  "warning-issue": { invalid_request: "Check the record. The effective date can be up to 60 days back or 7 days ahead." },
+  "warning-withdraw": { invalid_request: "Add a reason of at least 3 characters.", stale: "This record was changed by someone else. Reload and try again.", invalid_transition: "This record has already been withdrawn." },
 };
 
 async function call(action: string, body: Rec): Promise<Rec> {
@@ -35,7 +43,7 @@ async function call(action: string, body: Rec): Promise<Rec> {
   if (j?.ok === true) return j;
   const reason = str(j?.reason);
   if (reason === "no_access" || reason === "unauthenticated" || reason === "forbidden" || reason === "mfa_required") throw new RestrictedError();
-  throw new Error(REASON[reason] ?? "This could not be completed. Please try again.");
+  throw new Error(ACTION_REASON[action]?.[reason] ?? REASON[reason] ?? "This could not be completed. Please try again.");
 }
 
 const listeners = new Set<(e: AdapterEvent) => void>();
@@ -131,6 +139,70 @@ async function decide(id: string, decision: "approve" | "decline", note: string)
   if (!row) throw new Error("Reload to see this request.");
   return row;
 }
+
+
+/* ---------- warnings (day2-warnings-requests.sql, part A) ---------- */
+type WarnStaff = { id: string; name: string; client: string; outlet: string; clientId: string; outletId: string };
+type WarningsData = { items: WarningDetail[]; canIssue: boolean; types: string[]; severities: string[]; staff: WarnStaff[] };
+let warningsCache: WarningsData | null = null;
+const warningRevisions = new Map<string, number>();
+const WARNING_STATUSES: WarningStatus[] = ["issued", "acknowledged", "withdrawn"];
+
+/** Server item -> the approved WarningDetail. "disputed" is never produced (no dispute action exists). History is built from the stored dates only. */
+export function warningOf(raw: unknown, canIssue: boolean): WarningDetail | null {
+  const w = rec(raw);
+  if (!w || !str(w.id)) return null;
+  const status = (WARNING_STATUSES.includes(str(w.status) as WarningStatus) ? str(w.status) : "issued") as WarningStatus;
+  const requiresAck = w.requiresAck !== false;
+  const staffName = str(w.staffName);
+  const issuedAt = str(w.issuedAt);
+  const acknowledgedAt = str(w.acknowledgedAt) || null;
+  const history: WarningDetail["history"] = [{ id: `${str(w.id)}-issued`, action: "Issued", actor: str(w.issuedBy), at: issuedAt, previous: null, next: "Issued", note: null }];
+  if (acknowledgedAt) history.push({ id: `${str(w.id)}-ack`, action: "Acknowledged by staff", actor: staffName, at: acknowledgedAt, previous: "Issued", next: "Acknowledged", note: str(w.staffComment) || null });
+  return {
+    id: str(w.id), reference: str(w.reference), staff: { id: str(w.staffId), name: staffName }, clientId: str(w.clientId), client: str(w.clientName),
+    outletId: str(w.outletId), outlet: str(w.outletName), type: str(w.type), severity: str(w.severity), issuedBy: str(w.issuedBy),
+    effectiveDate: str(w.effectiveDate).slice(0, 10), status,
+    ack: !requiresAck ? "not-required" : status === "acknowledged" || acknowledgedAt ? "acknowledged" : "awaiting",
+    acknowledgedAt, details: str(w.details), issuedAt, requiresAcknowledgement: requiresAck,
+    withdrawnReason: status === "withdrawn" ? str(w.withdrawnReason) || null : null, disputeNote: null, history,
+    canWithdraw: canIssue && status !== "withdrawn",
+  };
+}
+
+async function warningsData(force = true): Promise<WarningsData> {
+  if (warningsCache && !force) return warningsCache;
+  const r = await call("warning-list", {});
+  const canIssue = r.canIssue === true;
+  const items = arr(r.items).map((x) => warningOf(x, canIssue)).filter((x): x is WarningDetail => !!x);
+  for (const raw of arr(r.items)) { const w = rec(raw); if (w) warningRevisions.set(str(w.id), Number(w.revision) || 1); }
+  const staff = arr(r.staff).map(rec).filter((p): p is Rec => !!p && !!str(p.id)).map((p) => ({ id: str(p.id), name: str(p.name), client: str(p.client), outlet: str(p.outlet), clientId: str(p.clientId), outletId: str(p.outletId) }));
+  warningsCache = { items, canIssue, types: arr(r.types).map(str).filter(Boolean), severities: arr(r.severities).map(str).filter(Boolean), staff };
+  return warningsCache;
+}
+
+const toWarningRow = (w: WarningDetail): WarningRow => ({
+  id: w.id, reference: w.reference, staff: w.staff, clientId: w.clientId, client: w.client, outletId: w.outletId, outlet: w.outlet,
+  type: w.type, severity: w.severity, issuedBy: w.issuedBy, effectiveDate: w.effectiveDate, status: w.status, ack: w.ack, acknowledgedAt: w.acknowledgedAt,
+});
+
+/** Clients / outlets to filter by: those on a record or among the staff HR may warn (both already scoped by the server). */
+function warningFacets(d: WarningsData): ScopeFacets {
+  const clients = new Map<string, string>();
+  const outlets = new Map<string, { id: string; clientId: string; name: string }>();
+  for (const w of d.items) { if (w.clientId) clients.set(w.clientId, w.client); if (w.outletId) outlets.set(w.outletId, { id: w.outletId, clientId: w.clientId, name: w.outlet }); }
+  for (const p of d.staff) { if (p.clientId) clients.set(p.clientId, p.client); if (p.outletId) outlets.set(p.outletId, { id: p.outletId, clientId: p.clientId, name: p.outlet }); }
+  const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name);
+  return { clients: [...clients].map(([id, name]) => ({ id, name })).sort(byName), outlets: [...outlets.values()].sort(byName) };
+}
+
+async function freshWarning(id: string): Promise<WarningDetail> {
+  const d = await warningsData(true);
+  const w = d.items.find((x) => x.id === id);
+  if (!w) throw new Error("Reload to see this record.");
+  return w;
+}
+
 
 export const liveWorkforceAdapter: WorkforceAdapter = {
   subscribe(listener) {
@@ -237,8 +309,37 @@ export const liveWorkforceAdapter: WorkforceAdapter = {
   },
   async approveLeave(id) { return decide(id, "approve", ""); },
   async declineLeave(id, input) { return decide(id, "decline", input.reason); },
-  async listWarnings() { throw new Error(NOT_CONNECTED); },
-  async getWarning() { throw new Error(NOT_CONNECTED); },
-  async issueWarning() { throw new Error(NOT_CONNECTED); },
-  async withdrawWarning() { throw new Error(NOT_CONNECTED); },
+  async listWarnings(q): Promise<WarningsPage> {
+    const d = await warningsData(true);
+    const term = q.search.trim().toLowerCase();
+    const scoped = d.items.filter((w) => (!q.clientId || w.clientId === q.clientId) && (!q.outletId || w.outletId === q.outletId) && (!q.type || w.type === q.type)
+      && (!term || [w.staff.name, w.type, w.severity, w.reference, w.outlet, w.client].some((v) => v.toLowerCase().includes(term))));
+    const tabs: WarningTab[] = ["all", "issued", "acknowledged", "disputed", "withdrawn"];
+    const tabCounts = Object.fromEntries(tabs.map((t) => [t, scoped.filter((w) => t === "all" || w.status === t).length])) as Record<WarningTab, number>;
+    const rows = scoped.filter((w) => q.tab === "all" || w.status === q.tab);
+    return {
+      rows: rows.slice(0, q.pageSize).map(toWarningRow), total: rows.length, tabCounts,
+      facets: { ...warningFacets(d), types: d.types },
+      options: { types: d.types, severities: d.severities, staff: d.staff.map((p) => ({ id: p.id, name: p.name, client: p.client, outlet: p.outlet })) },
+      canIssue: d.canIssue, workspaceEmpty: d.items.length === 0,
+    };
+  },
+  async getWarning(id) {
+    const d = await warningsData(!warningsCache?.items.some((w) => w.id === id));
+    return d.items.find((w) => w.id === id) ?? null;
+  },
+  async issueWarning(input) {
+    const r = await call("warning-issue", { staffId: input.staffId, type: input.type, severity: input.severity, details: input.details.trim(), effectiveDate: input.effectiveDate, requiresAck: input.requiresAcknowledgement });
+    changed();
+    return freshWarning(str(r.id));
+  },
+  async withdrawWarning(id, input) {
+    await call("warning-withdraw", { warningId: id, expectedRevision: warningRevisions.get(id) ?? 1, reason: input.reason.trim() });
+    changed();
+    return freshWarning(id);
+  },
+  /** This person's warnings (Admin staff profile, Warnings tab), from the same scoped list. */
+  async getStaffWarnings(staffId) {
+    return (await warningsData(true)).items.filter((w) => w.staff.id === staffId);
+  },
 };

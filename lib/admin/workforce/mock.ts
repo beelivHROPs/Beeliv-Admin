@@ -843,4 +843,6 @@ export const mockWorkforceAdapter: WorkforceAdapter = {
     w.canWithdraw = false;
     return { ...w };
   },
+  /** Preview keeps the staff record's own sample list. */
+  async getStaffWarnings() { return null; },
 };

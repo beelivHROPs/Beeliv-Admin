@@ -13,11 +13,13 @@ const REAL_PREFIXES = [
   "/admin/workforce/scheduling", // weekly rosters (workforce-shifts-attendance.sql, lib/admin/workforce/live.ts)
   "/admin/workforce/attendance", // check-ins against published shifts
   "/admin/workforce/leave", // leave requests and decisions (workforce-leave.sql)
+  "/admin/workforce/warnings", // warnings and records (day2-warnings-requests.sql, part A)
   "/admin/staff", // directory, assignments, documents (org records + staff documentation, live)
   "/admin/team-access", // team and access, invitations (auth backend, live)
   "/admin/ops/clients", // Operations clients and outlets (org records, live)
   "/admin/ops/staff", // Operations staff placements (org records, live)
   "/admin/ops/assignments", // Operations placements by client (org records, live)
+  "/admin/inbox", // client staff requests only (day2-warnings-requests.sql, lib/admin/inbox/live.ts); other sources stay empty
 ] as const;
 
 /** Home pages are replaced by a real "start here" page in a live deployment, so they need no banner. */
