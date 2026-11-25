@@ -54,6 +54,8 @@ export const useStaffLeaveHistory = (staffId: string): Live<StaffLeaveHistory> =
 export const useSchedule = (q: ScheduleQuery): Live<SchedulePage> => useLoad(() => service.getSchedule(q), JSON.stringify(q), (d) => d === null || d.workspaceEmpty);
 export const useWarnings = (q: WarningsQuery): Live<WarningsPage> => useLoad(() => service.listWarnings(q), JSON.stringify(q), (d) => d === null || d.workspaceEmpty);
 export const useWarning = (id: string): Live<WarningDetail> => useLoad(() => service.getWarning(id), id, (d) => d === null);
+/** data null = not served (preview); [] = none on record. */
+export const useStaffWarnings = (staffId: string): Live<WarningDetail[]> => useLoad(() => service.getStaffWarnings(staffId), staffId, (d) => d === null || d.length === 0);
 
 export const requestCorrection = service.requestCorrection;
 export const approveLeave = service.approveLeave;

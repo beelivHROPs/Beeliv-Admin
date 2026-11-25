@@ -168,9 +168,48 @@ export interface InterviewRequestInfo {
   interviewLabel: string;
 }
 
+/** A client staff request's own status (docs/contracts/day2-warnings-requests.sql, part B). */
+export type WorkforceRequestStatus = "submitted" | "under-review" | "in-recruitment" | "candidates-submitted" | "closed";
+
+export interface WorkforceRequestHistoryEntry {
+  action: "submitted" | "status_changed" | "message";
+  from: WorkforceRequestStatus | null;
+  to: WorkforceRequestStatus | null;
+  /** The message the client was sent with this change, if any. */
+  note: string | null;
+  at: ISODateTime;
+  by: string;
+}
+
+/**
+ * Present only on a live "workforce-request" case: what the client asked for and where it stands. Status changes go
+ * through `updateWorkforceRequest` with the revision it was read at; the database decides who may and what is allowed.
+ */
+export interface WorkforceRequestInfo {
+  requestId: string;
+  revision: number;
+  status: WorkforceRequestStatus;
+  requestedBy: string;
+  clientName: string;
+  outletName: string;
+  role: string;
+  department: string;
+  count: number;
+  /** YYYY-MM-DD */
+  resumptionDate: string;
+  reason: string;
+  notes: string;
+  /** The latest message the client sees. */
+  message: string | null;
+  history: WorkforceRequestHistoryEntry[];
+  canManage: boolean;
+}
+
 export interface InboxCaseDetail extends InboxCaseSummary {
   /** Only on "cant-attend" cases. */
   interviewRequest?: InterviewRequestInfo;
+  /** Only on live "workforce-request" cases. */
+  workforceRequest?: WorkforceRequestInfo;
   createdAt: ISODateTime;
   related: RelatedRecord | null;
   messages: InboxMessage[];

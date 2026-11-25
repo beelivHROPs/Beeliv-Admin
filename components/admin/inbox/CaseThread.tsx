@@ -401,7 +401,8 @@ export function CaseThread({
         </div>
       </div>
 
-      <Composer key={detail.id} detail={detail} permissions={permissions} />
+      {/* Client staff requests are answered through the status change in Case details (no email reply or note backend). */}
+      {detail.workforceRequest ? null : <Composer key={detail.id} detail={detail} permissions={permissions} />}
     </div>
   );
 }

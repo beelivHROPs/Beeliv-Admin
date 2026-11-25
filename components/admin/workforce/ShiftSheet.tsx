@@ -17,6 +17,7 @@ import { Exclaim } from "@/components/applicant/icons";
 import { SelectMenu } from "@/components/applicant/SelectMenu";
 import { addDays } from "@/lib/client/format";
 import { checkShiftConflicts, saveShift } from "@/lib/admin/workforce/hooks";
+import { earliestEditableShiftDate } from "@/lib/admin/workforce/lagos";
 import type { ShiftConflict, ShiftInput, ShiftRow, WeekRoster } from "@/lib/admin/workforce/types";
 import { FieldError, LABEL, SHEET_BTN, Sheet, stamp } from "./parts";
 
@@ -29,6 +30,7 @@ export function ShiftSheet({
   roster,
   shift,
   defaultDate,
+  defaultStaffId,
   onClose,
   onSaved,
   onFailed,
@@ -37,15 +39,18 @@ export function ShiftSheet({
   /** Null = create. */
   shift: ShiftRow | null;
   defaultDate: string;
+  /** Prefills the staff member when adding (staff profile, Schedule tab). */
+  defaultStaffId?: string;
   onClose: () => void;
   onSaved: (r: WeekRoster, text: string) => void;
   onFailed: (text: string) => void;
 }) {
   const uid = useId();
-  const [staffId, setStaffId] = useState(shift?.staff.id ?? "");
+  const preset = shift ? null : roster.staff.find((p) => p.id === defaultStaffId) ?? null;
+  const [staffId, setStaffId] = useState(shift?.staff.id ?? preset?.id ?? "");
   const [date, setDate] = useState(shift?.date ?? defaultDate);
-  const [role, setRole] = useState(shift?.role ?? "");
-  const [section, setSection] = useState(shift?.section ?? "");
+  const [role, setRole] = useState(shift?.role ?? preset?.role ?? "");
+  const [section, setSection] = useState(shift?.section ?? preset?.section ?? "");
   const [start, setStart] = useState(shift?.start ?? "");
   const [end, setEnd] = useState(shift?.end ?? "");
   const [breakMins, setBreak] = useState(String(shift?.breakMins ?? 30));
@@ -54,11 +59,15 @@ export function ShiftSheet({
   const [found, setFound] = useState<{ key: string; list: ShiftConflict[] } | null>(null);
 
   const weekEnd = addDays(roster.weekStart, 6);
+  // Past days can't be picked: the server refuses shifts dated before yesterday (Africa/Lagos).
+  const earliest = earliestEditableShiftDate();
+  const minDate = earliest > roster.weekStart ? earliest : roster.weekStart;
   const brk = Number(breakMins);
   const errors: Record<string, string> = {};
   if (!staffId) errors.staff = "Choose a staff member.";
   if (!date) errors.date = "Choose a date.";
   else if (date < roster.weekStart || date > weekEnd) errors.date = "The date must fall in the week you are scheduling.";
+  else if (date < earliest) errors.date = "Shifts can only be added or changed from yesterday onwards.";
   if (!role) errors.role = "Choose a role.";
   if (!section) errors.section = "Choose a section.";
   if (!start) errors.start = "Add a start time.";
@@ -100,8 +109,8 @@ export function ShiftSheet({
     try {
       const r = await saveShift(roster.outletId, shift?.id ?? null, input);
       onSaved(r, shift ? "The shift was updated. It stays out of staff view until the week is published." : "The shift was added as a draft. Staff see it once the week is published.");
-    } catch {
-      onFailed("We could not save the shift. Nothing was changed. Please try again.");
+    } catch (e) {
+      onFailed(e instanceof Error && e.message ? e.message : "We could not save the shift. Nothing was changed. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -136,7 +145,7 @@ export function ShiftSheet({
             <label htmlFor={`${uid}-d`} className={LABEL}>
               Date
             </label>
-            <DatePicker id={`${uid}-d`} title="Shift date" value={date} min={roster.weekStart} max={weekEnd} onChange={setDate} invalid={!!show("date")} />
+            <DatePicker id={`${uid}-d`} title="Shift date" value={date} min={minDate} max={weekEnd} onChange={setDate} invalid={!!show("date")} />
             <FieldError>{show("date")}</FieldError>
           </div>
         </div>

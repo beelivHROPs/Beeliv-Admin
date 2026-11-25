@@ -35,3 +35,4 @@ export const listWarnings: WorkforceAdapter["listWarnings"] = (q) => adapter.lis
 export const getWarning: WorkforceAdapter["getWarning"] = (id) => adapter.getWarning(id);
 export const issueWarning: WorkforceAdapter["issueWarning"] = (i) => adapter.issueWarning(i);
 export const withdrawWarning: WorkforceAdapter["withdrawWarning"] = (id, i) => adapter.withdrawWarning(id, i);
+export const getStaffWarnings: WorkforceAdapter["getStaffWarnings"] = (id) => adapter.getStaffWarnings(id);

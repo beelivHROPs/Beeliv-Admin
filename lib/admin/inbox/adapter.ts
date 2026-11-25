@@ -4,7 +4,7 @@
  * only fetches / writes; no business rules live in a component. Every call
  * must be re-checked by the backend against the user's role and queue (RLS).
  */
-import type { CasePickerItem, InboxCaseResult, InboxList, InboxStatus, NeedsHomeItem } from "./types";
+import type { CasePickerItem, InboxCaseResult, InboxList, InboxStatus, NeedsHomeItem, WorkforceRequestStatus } from "./types";
 
 export interface InboxAdapter {
   /** Fires whenever data changed (a write, or a dev reset). */
@@ -29,6 +29,11 @@ export interface InboxAdapter {
   assignNeedsHome(itemId: string, caseId: string): Promise<void>;
   /** Marks the email as spam (kept for audit, not deleted). */
   dismissNeedsHome(itemId: string): Promise<void>;
+  /**
+   * Client staff request (case.workforceRequest): set its status, with an optional message the client sees.
+   * Rejects with a plain sentence when the server refuses (changed since it was opened, closed, no permission).
+   */
+  updateWorkforceRequest(caseId: string, status: WorkforceRequestStatus, message: string): Promise<void>;
 }
 
 export class NotFoundError extends Error {

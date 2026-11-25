@@ -21,7 +21,9 @@ import { CARD } from "@/components/applicant/SectionCard";
 import { ShieldAlert } from "@/components/client/icons";
 import { useStaffMember } from "@/lib/admin/staff/hooks";
 import type { StaffDetail } from "@/lib/admin/staff/types";
-import { useStaffLeaveHistory } from "@/lib/admin/workforce/hooks";
+import { useStaffLeaveHistory, useStaffWarnings } from "@/lib/admin/workforce/hooks";
+import { teamAccessMode } from "@/lib/admin/team-access/mode";
+import { LiveSchedulePanel } from "./LiveSchedulePanel";
 import { formatDateShort } from "@/lib/applicant/time";
 import { AdminState, reassignHref, STAFF_DIRECTORY_HREF, useUrlParams } from "./parts";
 import { GlanceCard, Pill, StateChip, StatePhonePill, isAwaiting, metricsOf, stateOf } from "./detail-kit";
@@ -69,9 +71,14 @@ function Back() {
   );
 }
 
-function Body({ s, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; setTab: (k: TabKey) => void; tabId: string }) {
+function Body({ s: record, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; setTab: (k: TabKey) => void; tabId: string }) {
   const phone = useIsPhone();
-  const leave = useStaffLeaveHistory(s.id);
+  const leave = useStaffLeaveHistory(record.id);
+  // Live: this person's REAL warnings (day2-warnings-requests.sql), withdrawn ones left out. Preview (null): the record's own list.
+  const warned = useStaffWarnings(record.id).data;
+  const s: StaffDetail = warned
+    ? { ...record, warnings: warned.filter((w) => w.status !== "withdrawn").map((w) => ({ id: w.id, title: `${w.type} · ${w.severity}`, issuedAt: w.issuedAt, issuedBy: w.issuedBy, summary: w.details })) }
+    : record;
   const [openKey, setOpenKey] = useState<TabKey | null>(null);
   const sectionsRef = useRef<HTMLDivElement>(null);
 
@@ -165,12 +172,13 @@ function Body({ s, tab, setTab, tabId }: { s: StaffDetail; tab: TabKey; setTab: 
   const panels: Record<TabKey, ReactNode> = {
     overview: <OverviewPanel s={s} goTab={open} />,
     attendance: <AttendancePanel s={s} />,
-    schedule: <SchedulePanel s={s} />,
+    // Live: this person's real shifts at their current placement's outlet (same rosters as Scheduling). Preview: sample panel.
+    schedule: teamAccessMode() === "live" ? <LiveSchedulePanel staffId={s.id} outletId={s.assignments.find((a) => a.status === "current")?.outletId ?? ""} /> : <SchedulePanel s={s} />,
     leave: <LeavePanel live={leave} />,
     training: <TrainingPanel s={s} />,
     documents: <DocumentsPanel s={s} />,
     agreements: <AgreementsPanel s={s} />,
-    warnings: <WarningsPanel s={s} />,
+    warnings: <WarningsPanel s={s} live={warned !== null} />,
     history: <HistoryPanel s={s} />,
   };
 
